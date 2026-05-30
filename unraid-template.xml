@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>signal-cli-gateway</Name>
+  <Repository>signal-cli-gateway:latest</Repository>
+  <Registry>https://github.com/libre-7/signal-cli-gateway</Registry>
+  <Network>host</Network>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/libre-7/signal-cli-gateway</Support>
+  <Project>https://github.com/libre-7/signal-cli-gateway</Project>
+  <Overview>Configurable secure Docker container for the signal-cli daemon with optional authentication proxy. Designed for Hermes Agent integration.
+
+BUILD FIRST (one-time from Unraid terminal or SSH):
+  git clone https://github.com/libre-7/signal-cli-gateway.git /tmp/signal-cli-gateway
+  cd /tmp/signal-cli-gateway &amp;&amp; docker build -t signal-cli-gateway:latest .
+
+SECURITY MODES (set SECURITY_MODE env var):
+  loopback         - signal-cli on 127.0.0.1:8080, no auth.
+  loopback-proxy   - signal-cli on 127.0.0.1:8080 + auth proxy on 127.0.0.1:8880.
+  exposed-proxy    - Same as above but proxy on 0.0.0.0:8880.
+  unix             - UNIX socket + socat TCP bridge.</Overview>
+  <Category>Messaging:Utility</Category>
+
+  <Shell>bash</Shell>
+  <ShellCommand>/scripts/entrypoint.sh</ShellCommand>
+
+  <!-- Environment Variables -->
+
+  <Config Name="SIGNAL_ACCOUNT" Target="SIGNAL_ACCOUNT" Mode="v" Type="Variable" Display="always" Required="true" Mask="false" Default="+130****7101" Description="Your Signal phone number in E.164 format. REQUIRED."/>
+
+  <Config Name="SECURITY_MODE" Target="SECURITY_MODE" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="loopback-proxy" Description="Security mode: loopback, loopback-proxy, exposed-proxy, unix."/>
+
+  <Config Name="SECURITY_PROXY_TOKEN" Target="SECURITY_PROXY_TOKEN" Mode="v" Type="Variable" Display="always" Required="false" Mask="true" Default="" Description="Bearer token for proxy. Auto-generated if empty."/>
+
+  <Config Name="SECURITY_PROXY_ALLOWED_IPS" Target="SECURITY_PROXY_ALLOWED_IPS" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="127.0.0.1,172.0.0.0/8,10.0.0.0/8" Description="CIDR ranges that bypass proxy auth."/>
+
+  <Config Name="SIGNAL_CLI_PORT" Target="SIGNAL_CLI_PORT" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="8080" Description="signal-cli daemon HTTP port."/>
+
+  <Config Name="PROXY_PORT" Target="PROXY_PORT" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="8880" Description="Proxy listener port."/>
+
+  <Config Name="LOG_LEVEL" Target="LOG_LEVEL" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="info" Description="Proxy log level: info, debug, warn, error."/>
+
+  <!-- Volume Mappings -->
+
+  <Config Name="Data Volume" Target="/opt/signal-cli-data" Mode="rw" Type="Path" Display="always" Required="true" Mask="false" Default="/mnt/user/appdata/signal-cli-gateway/" Description="Persistent storage for Signal identity keys and config. MUST persist across container updates."/>
+
+</Container>
