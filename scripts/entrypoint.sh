@@ -55,16 +55,18 @@ SIGNAL_CLI_ARGS=(
     "--trust-new-identities" "${SIGNAL_TRUST}"
 )
 
-# Append optional ignore flags
-[ "${SIGNAL_CLI_IGNORE_ATTACHMENTS:-false}" = "true" ] && SIGNAL_CLI_ARGS+=( "--ignore-attachments" )
-[ "${SIGNAL_CLI_IGNORE_STORIES:-true}" = "true" ] && SIGNAL_CLI_ARGS+=( "--ignore-stories" )
-[ "${SIGNAL_CLI_IGNORE_AVATARS:-true}" = "true" ] && SIGNAL_CLI_ARGS+=( "--ignore-avatars" )
-[ "${SIGNAL_CLI_IGNORE_STICKERS:-true}" = "true" ] && SIGNAL_CLI_ARGS+=( "--ignore-stickers" )
+# Append optional ignore flags — native binary doesn't support daemon-level ignore flags
+# These are only for JVM build. Native skips them.
+true
 
 # --- Signal CLI daemon helper (used by multiple modes) ----------------------
 start_signal_cli() {
     local bind="${1:-127.0.0.1}"
     log "Starting signal-cli daemon on ${bind}:${SIGNAL_CLI_PORT}..."
+
+    # Ensure data directory is writable by the signal user
+    chown -R signal:signal /opt/signal-cli-data 2>/dev/null || true
+
     gosu signal signal-cli "${SIGNAL_CLI_ARGS[@]}" \
         daemon --http "${bind}:${SIGNAL_CLI_PORT}" &
     local pid=$!
@@ -130,13 +132,19 @@ $(printf "${trusted_ips_yaml}")
         - pattern: /v1/register
         - pattern: /v1/accounts
         - pattern: /v1/qrcodelink
+    cors:
+      methods: [GET, POST]
+      headers: ["Content-Type"]
+      origins:
+        - url: "*"
 PROXYCFG
 
     log "Proxy config written to /config/config.yml"
     log "Proxy token set: ${proxy_token:0:8}... (truncated)"
 
-    # Export token so users can read it from env if they mounted a custom entrypoint
+    # Export token and config path for proxy to pick up
     export SECURITY_PROXY_TOKEN="${proxy_token}"
+    export CONFIG_PATH=/config/config.yml
 }
 
 # --- Mode-specific startup --------------------------------------------------

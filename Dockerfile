@@ -6,21 +6,15 @@
 # Stage 1: signal-cli native binary
 FROM ubuntu:24.04 AS signal-cli-builder
 
-ARG SIGNAL_CLI_VERSION=0.14.4.1
-ARG TARGETARCH
+ARG SIGNAL_CLI_VERSION=0.14.3
 
 RUN apt-get update -qq && apt-get install -y -qq wget ca-certificates && rm -rf /var/lib/apt/lists/*
 
-RUN case "${TARGETARCH}" in \
-        amd64)   URL_ARCH="x86_64" ;; \
-        arm64)   URL_ARCH="aarch64" ;; \
-        *)       echo "Unsupported arch: ${TARGETARCH}"; exit 1 ;; \
-    esac && \
-    wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-${URL_ARCH}.tar.gz" \
+RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz" \
          -O /tmp/signal-cli.tar.gz && \
     tar xzf /tmp/signal-cli.tar.gz -C /opt && \
-    mv /opt/signal-cli-* /opt/signal-cli && \
-    rm /tmp/signal-cli.tar.gz
+    rm /tmp/signal-cli.tar.gz && \
+    test -x /opt/signal-cli
 
 # Stage 2: secured-signal-api proxy binary
 FROM golang:1.26-alpine AS proxy-builder
@@ -51,8 +45,8 @@ RUN apt-get update -qq && apt-get install -y -qq \
 # Create non-root user
 RUN groupadd -r signal && useradd -r -g signal -d /opt/signal-cli-data -s /sbin/nologin signal
 
-# Copy signal-cli native binary
-COPY --from=signal-cli-builder /opt/signal-cli /opt/signal-cli
+# Copy signal-cli native binary (from native tarball — single flat file)
+COPY --from=signal-cli-builder /opt/signal-cli /opt/signal-cli/bin/signal-cli
 RUN ln -sf /opt/signal-cli/bin/signal-cli /usr/local/bin/signal-cli
 
 # Copy secured-signal-api proxy binary (optional)
