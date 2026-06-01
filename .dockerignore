@@ -1,0 +1,9 @@
+.git
+.gitignore
+*.md
+.env
+.env.*
+LICENSE
+*.tar.gz
+*.log
+.DS_Store

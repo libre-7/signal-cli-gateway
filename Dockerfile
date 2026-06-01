@@ -6,15 +6,19 @@
 # Stage 1: signal-cli native binary
 FROM ubuntu:24.04 AS signal-cli-builder
 
-ARG SIGNAL_CLI_VERSION=0.14.3
+ARG SIGNAL_CLI_VERSION=0.14.4.1
 
 RUN apt-get update -qq && apt-get install -y -qq wget ca-certificates && rm -rf /var/lib/apt/lists/*
 
+# signal-cli 0.14.4+ native tarball extracts as a single flat file
+# (signal-cli-X.Y.Z-Linux-native.tar.gz contains just ./signal-cli)
 RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz" \
          -O /tmp/signal-cli.tar.gz && \
-    tar xzf /tmp/signal-cli.tar.gz -C /opt && \
+    mkdir -p /opt/signal-cli/bin && \
+    tar xzf /tmp/signal-cli.tar.gz -C /opt/signal-cli/bin && \
     rm /tmp/signal-cli.tar.gz && \
-    test -x /opt/signal-cli
+    test -x /opt/signal-cli/bin/signal-cli && \
+    chmod +x /opt/signal-cli/bin/signal-cli
 
 # Stage 2: secured-signal-api proxy binary
 FROM golang:1.26-alpine AS proxy-builder
@@ -45,9 +49,9 @@ RUN apt-get update -qq && apt-get install -y -qq \
 # Create non-root user
 RUN groupadd -r signal && useradd -r -g signal -d /opt/signal-cli-data -s /sbin/nologin signal
 
-# Copy signal-cli native binary (from native tarball — single flat file)
-COPY --from=signal-cli-builder /opt/signal-cli /opt/signal-cli/bin/signal-cli
-RUN ln -sf /opt/signal-cli/bin/signal-cli /usr/local/bin/signal-cli
+# Copy signal-cli native binary (already extracted into /opt/signal-cli/bin/signal-cli in stage 1)
+COPY --from=signal-cli-builder /opt/signal-cli/bin/signal-cli /usr/local/bin/signal-cli
+RUN chmod +x /usr/local/bin/signal-cli
 
 # Copy secured-signal-api proxy binary (optional)
 COPY --from=proxy-builder /opt/secured-signal-api /opt/secured-signal-api/secured-signal-api
