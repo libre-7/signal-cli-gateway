@@ -54,7 +54,7 @@ signal-cli daemon --http 0.0.0.0:8080
 **Threat coverage:**
 - ❌ No authentication — anyone who can reach the port owns your Signal account
 - ❌ No TLS — traffic in cleartext
-- ❌ No endpoint filtering — `register`, `link`, `send` all exposed
+- ⚠️ No access control — all JSON-RPC methods (send, receive, list accounts, link, register) accessible through the single `/api/v1/rpc` endpoint
 - ✅ E2E encryption intact between daemon and Signal servers
 
 **Complexity:** Zero.
@@ -140,7 +140,7 @@ Caddy configuration:
 - ✅ Authentication (Basic Auth)
 - ✅ TLS termination (Caddy auto-provisions Let's Encrypt certs)
 - ✅ Blocks unauthorized callers at the proxy layer
-- ❌ signal-cli management endpoints still reachable (no endpoint filtering)
+- ⚠️ No endpoint-level blocking (native daemon only exposes 3 paths, but Caddy can't selectively filter JSON-RPC methods inside `/api/v1/rpc`)
 - ⚠️ Caddy must be managed/updated separately
 
 **Complexity:** Medium. Docker multi-stage build adds Caddy binary.
@@ -179,7 +179,6 @@ patches. Nginx is equivalent to Caddy here.
 |---------|-------------|-------------------|
 | Bearer/Basic/Body/Query/Path auth | Basic Auth only | 5 auth methods |
 | IP allowlisting | Via config | Built-in |
-| Endpoint blocking | Manual location blocks | Built-in (blocks `/v1/register`, `qrcodelink`, etc.) |
 | Per-token config overrides | ❌ | ✅ |
 | Rate limiting | Manual via plugins | Built-in |
 | Field policies (block specific numbers) | ❌ | ✅ |
@@ -188,7 +187,6 @@ patches. Nginx is equivalent to Caddy here.
 
 **Threat coverage:**
 - ✅ Multi-method authentication (Bearer, Basic, etc.)
-- ✅ Endpoint-level access control — blocks dangerous endpoints by default
 - ✅ IP allowlisting — Hermes container can bypass auth via IP
 - ✅ Rate limiting prevents abuse
 - ✅ Field policies prevent specific phone numbers from being used as recipients
@@ -211,8 +209,8 @@ settings:
 ```
 
 With this, Hermes connects unauthenticated to the proxy, while any other caller
-must present a Bearer token. The proxy still blocks dangerous endpoints even for
-trusted IPs.
+must present a Bearer token. The proxy is the only entry point since signal-cli
+binds to loopback.
 
 **Verdict:** Best option for Docker environments. Purpose-built for this use case.
 The IP allowlisting solves the Hermes auth gap cleanly.
@@ -329,7 +327,7 @@ SECURITY_MODE=loopback          # Options: loopback, loopback-proxy, exposed-pro
 # -- Security Mode: proxy auth (for loopback-proxy / exposed-proxy) --
 SECURITY_PROXY_TOKEN=          # Bearer token for proxy auth (auto-generated if empty)
 SECURITY_PROXY_ALLOWED_IPS=    # CIDRs that bypass auth (default: 127.0.0.1, 172.0.0.0/8)
-SECURITY_PROXY_BLOCK_ENDPOINTS= # Additional endpoints to block (comma-separated)
+PROXY_PORT=8880                # Proxy listener port (default: 8880)
 
 # -- Security Mode: loopback / unix --
 SIGNAL_CLI_PORT=8080           # signal-cli daemon port (default: 8080)
@@ -475,4 +473,4 @@ For the default recommended setup:
 - Hermes connects on `127.0.0.1:8880` (host networking) or `signal-cli-gateway:8880` (Docker bridge)
 - Bearer token + IP allowlisting protects the proxy
 - signal-cli itself is unreachable, bound to 127.0.0.1:8080
-- Dangerous endpoints (`/v1/register`, `/v1/qrcodelink`, etc.) blocked by proxy
+- Dangerous management endpoints are not exposed — signal-cli's `--http` mode only exposes `/api/v1/rpc`, `/api/v1/events`, and `/api/v1/check`. Management operations (`register`, `link`, `unregister`) are CLI-only.

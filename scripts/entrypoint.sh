@@ -123,20 +123,11 @@ settings:
   access:
     trustedIPs:
 $(printf "${trusted_ips_yaml}")
-    endpoints:
-      blocked:
-        - pattern: /v1/configuration
-        - pattern: /v1/unregister
-        - pattern: /v1/devices
-        - pattern: /v1/contacts
-        - pattern: /v1/register
-        - pattern: /v1/accounts
-        - pattern: /v1/qrcodelink
     cors:
       methods: [GET, POST]
       headers: ["Content-Type"]
       origins:
-        - url: "*"
+        - url: "http://localhost"
 PROXYCFG
 
     log "Proxy config written to /config/config.yml"
