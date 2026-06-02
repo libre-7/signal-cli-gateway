@@ -36,12 +36,14 @@ docker run -d --name signal-cli-gateway --restart unless-stopped \
 
 ## Security Modes
 
-| Mode | Env Var | signal-cli | Exposed | Auth | Proxy | Use Case |
-|------|---------|------------|---------|------|-------|----------|
-| **Loopback** | `loopback` | 127.0.0.1:8080 | ❌ | None | No | Hermes on host networking, trusted LAN |
-| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 127.0.0.1:8880 (proxy) | Bearer + IP allowlist | **secured-signal-api** | ✅ **Recommended default** |
-| **Exposed + Proxy** | `exposed-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy) | Bearer + IP allowlist | **secured-signal-api** | Multi-host, Kubernetes, cloud |
-| **UNIX Socket** | `unix` | `/var/run/signal-cli/socket` | Socat bridge 127.0.0.1:8080 | File perms | Socat | Maximum process isolation |
+| Mode | Env Var | signal-cli | Exposed | Auth | Network | Use Case |
+|------|---------|------------|---------|------|---------|----------|
+| **Loopback** | `loopback` | 127.0.0.1:8080 | ❌ | None | Host | Hermes on host networking, trusted LAN |
+| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 127.0.0.1:8880 (proxy) | Bearer + IP allowlist | Host | ✅ **Recommended default** |
+| **Exposed + Proxy** | `exposed-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy) | Bearer + IP allowlist | Bridge or Host | Multi-host, Kubernetes, cloud |
+| **UNIX Socket** | `unix` | `/var/run/signal-cli/socket` | Socat bridge 127.0.0.1:8080 | File perms | Host | Maximum process isolation |
+
+> **Network note:** Modes that bind to `127.0.0.1` (loopback, loopback-proxy, unix) require `--network host` because `127.0.0.1` inside a bridge network is unreachable from outside the container. `exposed-proxy` works on bridge — the proxy binds `0.0.0.0:8880`, so port mapping (`-p 8880:8880`) works, and signal-cli stays on loopback internally.
 
 ### Why loopback-proxy is the default
 

@@ -13,19 +13,22 @@
 Supports 4 security modes via SECURITY_MODE env var:
 
   loopback (default)
-    signal-cli daemon on 127.0.0.1:8080, no proxy.
-    Use when all consumers share host networking.
+    signal-cli daemon on 127.0.0.1:8080, no auth.
+    Requires --network host (loopback inside bridge is unreachable).
 
   loopback-proxy (recommended)
     signal-cli on 127.0.0.1:8080 + auth proxy on 127.0.0.1:8880.
     Bearer token + IP allowlist protects the proxy.
-    Hermes connects on port 8880 with no auth needed (IP trusted).
+    Requires --network host.
 
   exposed-proxy
-    Same as loopback-proxy but proxy binds 0.0.0.0:8880 for remote access.
+    Proxy binds 0.0.0.0:8880 for remote access.
+    Works on bridge too — add port mapping (-p 8880:8880).
+    signal-cli stays on loopback internally.
 
   unix
     signal-cli on UNIX socket + socat TCP bridge.
+    Requires --network host.
 
 FIRST USE — Link your phone (one-time):
   docker run --rm -it \
