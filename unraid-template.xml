@@ -7,7 +7,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/libre-7/signal-cli-gateway</Support>
   <Project>https://github.com/libre-7/signal-cli-gateway</Project>
-  <Icon>https://raw.githubusercontent.com/signalapp/Signal-Desktop/main/images/signal-logo-desktop-linux.png</Icon>
+  <Icon>https://raw.githubusercontent.com/CorneliousJD/Docker-Templates/master/icons/signal.png</Icon>
   <Overview>Configurable, security-hardened Docker container for the signal-cli daemon. Designed for Hermes Agent integration and other automation use cases.
 
 Supports 4 security modes via SECURITY_MODE env var:
