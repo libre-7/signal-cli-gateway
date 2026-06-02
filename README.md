@@ -47,7 +47,7 @@ docker run -d --name signal-cli-gateway --restart unless-stopped \
 
 1. **signal-cli is never exposed** — binds to 127.0.0.1, unreachable from other containers
 2. **Authentication on every proxied request** — Bearer token or Basic Auth required
-3. **Dangerous endpoints blocked by default** — `/v1/register`, `/v1/qrcodelink`, `/v1/configuration`, `/v1/unregister`, etc.
+3. **Dangerous management endpoints unreachable** — signal-cli binds to loopback (`127.0.0.1:8080`). The proxy only forwards requests to the JSON-RPC endpoint (`/api/v1/rpc`), and management operations (`register`, `link`, `unregister`) are CLI-only — they don't exist as HTTP endpoints. Token auth + IP allowlist prevent unauthorized access.
 4. **IP allowlist for Hermes** — trusted IPs bypass auth so Hermes' `signal.py` adapter works unpatched
 5. **Auto-generated random token** — if you don't set `SECURITY_PROXY_TOKEN`, one is generated and logged at startup
 
@@ -120,10 +120,10 @@ the connection source. All other callers must authenticate.
 **No Hermes adapter patches needed.** The built-in `gateway/platforms/signal.py`
 works as-is when the IP is allowlisted.
 
-## Advanced: Custom Endpoint Restrictions
+## Advanced: Custom Proxy Configuration
 
 Mount your own `config.yml` to `/config/config.yml` to override default
-endpoint blocking, add rate limiting, field policies, or message templates.
+settings — add rate limiting, field policies, message templates, etc.
 See [secured-signal-api docs](https://codeshelldev.github.io/secured-signal-api)
 for the full configuration reference.
 
