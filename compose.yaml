@@ -1,0 +1,47 @@
+# =============================================================================
+# signal-cli-gateway — Docker Compose
+# =============================================================================
+# Quick start:
+#   1. mkdir -p signal-cli-data
+#   2. docker compose run --rm link
+#   3. Scan QR from Signal app → Settings → Linked Devices
+#   4. Edit SIGNAL_ACCOUNT in services.gateway.environment below
+#   5. docker compose up -d
+# =============================================================================
+
+name: signal-cli-gateway
+
+services:
+  link:
+    image: ghcr.io/libre-7/signal-cli-gateway:latest
+    build: .
+    container_name: signal-cli-link
+    environment:
+      - DEVICE_NAME=SignalGateway
+    volumes:
+      - ./signal-cli-data:/opt/signal-cli-data
+    entrypoint: ["bash", "/scripts/link-account.sh"]
+    stdin_open: true
+    tty: true
+    profiles:
+      - link
+
+  gateway:
+    image: ghcr.io/libre-7/signal-cli-gateway:latest
+    build: .
+    container_name: signal-cli-gateway
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - SIGNAL_ACCOUNT=+123****7890
+      - SECURITY_MODE=loopback-proxy
+      # Set a fixed token to avoid losing it on container restart:
+      # - SECURITY_PROXY_TOKEN=your-fixed-token-here
+    volumes:
+      - ./signal-cli-data:/opt/signal-cli-data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8880/api/v1/check || curl -sf http://127.0.0.1:8080/api/v1/check || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

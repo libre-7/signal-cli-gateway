@@ -6,7 +6,7 @@
 # Stage 1: signal-cli native binary
 FROM ubuntu:24.04 AS signal-cli-builder
 
-ARG SIGNAL_CLI_VERSION=0.14.4.1
+ARG SIGNAL_CLI_VERSION=0.14.5
 
 RUN apt-get update -qq && apt-get install -y -qq wget ca-certificates && rm -rf /var/lib/apt/lists/*
 
@@ -70,6 +70,10 @@ VOLUME ["/opt/signal-cli-data", "/config"]
 
 # Ports (proxy binds here by default, signal-cli on 8080 internally)
 EXPOSE 8880 8080
+
+# Health check — verifies the proxy endpoint is reachable, falls back to daemon
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -sf http://127.0.0.1:${PROXY_PORT:-8880}/api/v1/check || curl -sf http://127.0.0.1:${SIGNAL_CLI_PORT:-8080}/api/v1/check || exit 1
 
 # Entrypoint
 ENTRYPOINT ["/scripts/entrypoint.sh"]

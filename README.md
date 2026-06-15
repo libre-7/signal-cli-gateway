@@ -1,15 +1,21 @@
 # signal-cli-gateway
 
+[![Build](https://github.com/libre-7/signal-cli-gateway/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/libre-7/signal-cli-gateway/actions/workflows/docker-publish.yml)
+
 **Configurable, security-hardened Docker container for signal-cli daemon.**
 Designed for Hermes Agent integration and other automation use cases.
 
 ## Quick Start
 
 ```bash
-# 1. Build the image
+# 1. Clone repo
+git clone https://github.com/libre-7/signal-cli-gateway.git
+cd signal-cli-gateway
+
+# 2. (Optional) Build the image locally
 docker build -t signal-cli-gateway .
 
-# 2. Link your phone (one-time setup)
+# 3. Link your phone (one-time setup)
 mkdir -p signal-cli-data
 docker run --rm -it \
   -v "$(pwd)/signal-cli-data:/opt/signal-cli-data" \
@@ -19,14 +25,9 @@ docker run --rm -it \
 
 # Scan the QR code from Signal → Settings → Linked Devices
 
-# 3. Run the daemon
-docker run -d --name signal-cli-gateway --restart unless-stopped \
-  --network host \
-  -v "$(pwd)/signal-cli-data:/opt/signal-cli-data" \
-  -e SIGNAL_ACCOUNT=+123****7890 \
-  -e SECURITY_MODE=loopback-proxy \
-  -e SECURITY_PROXY_TOKEN=my-secret-token \
-  signal-cli-gateway
+# 4. Edit SIGNAL_ACCOUNT in compose.yaml, then start
+docker compose up -d
+```
 
 # 4. Configure Hermes
 # SIGNAL_HTTP_URL=http://127.0.0.1:8880
@@ -94,10 +95,6 @@ unix mode:
 | `PROXY_PORT` | `8880` | secured-signal-api proxy port |
 | **signal-cli options** | | |
 | `SIGNAL_CLI_TRUST_NEW_IDENTITIES` | `on-first-use` | `on-first-use`, `always`, `never` |
-| `SIGNAL_CLI_IGNORE_ATTACHMENTS` | `false` | |
-| `SIGNAL_CLI_IGNORE_STORIES` | `true` | |
-| `SIGNAL_CLI_IGNORE_AVATARS` | `true` | |
-| `SIGNAL_CLI_IGNORE_STICKERS` | `true` | |
 | **Account linking** | | |
 | `DEVICE_NAME` | `SignalGateway` | Name shown in Signal's linked device list |
 
