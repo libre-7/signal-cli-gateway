@@ -33,7 +33,7 @@ Supports 4 security modes via SECURITY_MODE env var:
 FIRST USE — Link your phone (one-time):
   docker run --rm -it \
     -v /mnt/user/appdata/signal-cli-gateway:/opt/signal-cli-data \
-    -e SIGNAL_ACCOUNT=+130****7101 \
+    -e SIGNAL_ACCOUNT=+123****7890 \
     ghcr.io/libre-7/signal-cli-gateway:latest \
     bash /scripts/link-account.sh
 
