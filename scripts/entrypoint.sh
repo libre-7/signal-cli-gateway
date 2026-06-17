@@ -55,9 +55,8 @@ SIGNAL_CLI_ARGS=(
     "--trust-new-identities" "${SIGNAL_TRUST}"
 )
 
-# Append optional ignore flags — native binary doesn't support daemon-level ignore flags
-# These are only for JVM build. Native skips them.
-true
+# Optional ignore flags (JVM-only, not supported by native binary)
+# SIGNAL_CLI_IGNORE_ATTACHMENTS and SIGNAL_CLI_IGNORE_STORIES are no-ops on native
 
 # --- Signal CLI daemon helper (used by multiple modes) ----------------------
 start_signal_cli() {
@@ -89,6 +88,7 @@ write_proxy_config() {
     local proxy_port="${1:-8880}"
     local proxy_token="${2:-}"
     local proxy_allowed_ips="${3:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}"
+    local proxy_bind_mode="${4:-exposed}"
 
     # Generate a random proxy token if none provided
     if [ -z "${proxy_token}" ]; then
@@ -103,8 +103,20 @@ write_proxy_config() {
     IFS=',' read -ra ips <<< "${proxy_allowed_ips}"
     for ip in "${ips[@]}"; do
         ip="$(echo "${ip}" | xargs)"
-        [ -n "${ip}" ] && trusted_ips_yaml="${trusted_ips_yaml}      - \"${ip}\"\n"
+        [ -n "${ip}" ] && trusted_ips_yaml="${trusted_ips_yaml}      - \"${ip}\""$'\n'
     done
+
+    # Build ipFilter block — loopback-proxy restricts to local IPs only
+    local ip_filter_yaml=""
+    if [ "${proxy_bind_mode}" = "loopback" ]; then
+        ip_filter_yaml="    ipFilter:
+      allowed:
+        - 127.0.0.1
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+"
+    fi
 
     # Write config file
     cat > /config/config.yml << PROXYCFG
@@ -122,8 +134,8 @@ api:
 settings:
   access:
     trustedIPs:
-$(printf "${trusted_ips_yaml}")
-    cors:
+$(printf "%s" "${trusted_ips_yaml}")
+${ip_filter_yaml}    cors:
       methods: [GET, POST]
       headers: ["Content-Type"]
       origins:
@@ -146,24 +158,24 @@ case "${SECURITY_MODE}" in
 
     loopback-proxy)
         start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}"
+        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "loopback"
 
-        log "Starting secured-signal-api proxy on 127.0.0.1:${PROXY_PORT:-8880}..."
+        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only)..."
         /opt/secured-signal-api/secured-signal-api &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
 
     exposed-proxy)
         start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}"
+        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "exposed"
 
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880}..."
+        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter)..."
         /opt/secured-signal-api/secured-signal-api &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
 
     unix)
-        local socket_path="/var/run/signal-cli/socket"
+        socket_path="/var/run/signal-cli/socket"
         mkdir -p "$(dirname "${socket_path}")"
 
         log "Starting signal-cli daemon on UNIX socket ${socket_path}..."

@@ -1,11 +1,14 @@
 #!/bin/bash
 # Test script for signal-cli-gateway
 # Usage: ./test-proxy.sh [token]
-set -e
+set -euo pipefail
 
-TOKEN=*** 
+TOKEN="${1:-}"
+[ -n "${1:-}" ] && TOKEN="$1"
+
 echo "=== Authenticated request ==="
-curl -v -H "Authorization: Bearer *** http://127.0.0.1:8880/api/v1/check 2>&1 | head -15
+curl -v -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8880/api/v1/check 2>&1 | head -15
 
 echo ""
 echo "=== No auth (expect 401/403) ==="

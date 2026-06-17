@@ -62,7 +62,7 @@ docker run --rm -it \
 
 echo ""
 echo "━━━ After linking, proceed to Step 5 ━━━"
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..." </dev/tty
 
 # --- Step 5: Remove old container if exists ---
 echo ""

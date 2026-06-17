@@ -283,7 +283,7 @@ infrastructure.
 | Mode | `SECURITY_MODE` | Components Exposed | Auth | Use Case |
 |------|-----------------|-------------------|------|----------|
 | **loopback** | `loopback` | `127.0.0.1:8080` | None | Hermes on host networking. Trusted environment. |
-| **loopback-proxy** | `loopback-proxy` | `127.0.0.1:8880` (proxy only) | Bearer + IP allowlist | Hermes on host networking + auth. Default recommended. |
+| **loopback-proxy** | `loopback-proxy` | `0.0.0.0:8880` (proxy, ipFilter: local-only) | Bearer + IP allowlist | Hermes on host networking + auth. Default recommended. |
 | **exposed-proxy** | `exposed-proxy` | `0.0.0.0:8880` (proxy only) | Bearer + IP allowlist | Multi-host setups, Kubernetes, cloud. Proxy handles access control. |
 | **unix** | `unix` | `/var/run/signal-cli/socket` | File permissions + socat bridge | Maximum isolation on single host. |
 
@@ -296,7 +296,7 @@ loopback:
 loopback-proxy:
   signal-cli → 127.0.0.1:8080 (loopback, unreachable)
        ↑
-  secured-signal-api → 127.0.0.1:8880 (Bearer auth, IP allowlist)
+  secured-signal-api → 0.0.0.0:8880 (Bearer auth, IP allowlist, ipFilter: local-only)
        ↑
   Hermes → 127.0.0.1:8880 (no auth needed, IP is trusted)
 

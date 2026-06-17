@@ -40,7 +40,7 @@ docker compose up -d
 | Mode | Env Var | signal-cli | Exposed | Auth | Network | Use Case |
 |------|---------|------------|---------|------|---------|----------|
 | **Loopback** | `loopback` | 127.0.0.1:8080 | ❌ | None | Host | Hermes on host networking, trusted LAN |
-| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 127.0.0.1:8880 (proxy) | Bearer + IP allowlist | Host | ✅ **Recommended default** |
+| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy, ipFilter: local-only) | Bearer + IP allowlist + ipFilter | Host | ✅ **Recommended default** |
 | **Exposed + Proxy** | `exposed-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy) | Bearer + IP allowlist | Bridge or Host | Multi-host, Kubernetes, cloud |
 | **UNIX Socket** | `unix` | `/var/run/signal-cli/socket` | Socat bridge 127.0.0.1:8080 | File perms | Host | Maximum process isolation |
 
@@ -63,7 +63,7 @@ loopback mode:
 loopback-proxy mode:
   signal-cli daemon → 127.0.0.1:8080 (loopback, unreachable)
        ↑ (proxied, secured)
-  secured-signal-api → 127.0.0.1:8880 (Bearer auth + IP allowlist)
+  secured-signal-api → 0.0.0.0:8880 (Bearer auth + IP allowlist + ipFilter: local-only)
        ↑
   Hermes → 127.0.0.1:8880 (IP is trusted, no auth needed)
 
