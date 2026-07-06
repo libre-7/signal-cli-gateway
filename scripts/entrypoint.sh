@@ -88,7 +88,7 @@ start_signal_cli() {
 write_proxy_config() {
     local proxy_port="${1:-8880}"
     local proxy_token="${2:-}"
-    local proxy_allowed_ips="${3:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}"
+    local proxy_allowed_ips="${3:-127.0.0.1,172.17.0.0/16,10.0.0.0/8}"
 
     # Generate a random proxy token if none provided
     if [ -z "${proxy_token}" ]; then

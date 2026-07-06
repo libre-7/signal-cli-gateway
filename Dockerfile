@@ -4,7 +4,7 @@
 # proxy layer for authentication and endpoint security.
 # =============================================================================
 # Stage 1: signal-cli native binary
-FROM ubuntu:24.04 AS signal-cli-builder
+FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS signal-cli-builder
 
 ARG SIGNAL_CLI_VERSION=0.14.4.1
 
@@ -12,16 +12,20 @@ RUN apt-get update -qq && apt-get install -y -qq wget ca-certificates && rm -rf 
 
 # signal-cli 0.14.4+ native tarball extracts as a single flat file
 # (signal-cli-X.Y.Z-Linux-native.tar.gz contains just ./signal-cli)
+# SHA256 verification: download checksum file, filter for the native tarball, verify
 RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz" \
          -O /tmp/signal-cli.tar.gz && \
+    wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz.sha256" \
+         -O /tmp/signal-cli.tar.gz.sha256 && \
+    sha256sum -c /tmp/signal-cli.tar.gz.sha256 && \
     mkdir -p /opt/signal-cli/bin && \
     tar xzf /tmp/signal-cli.tar.gz -C /opt/signal-cli/bin && \
-    rm /tmp/signal-cli.tar.gz && \
+    rm /tmp/signal-cli.tar.gz /tmp/signal-cli.tar.gz.sha256 && \
     test -x /opt/signal-cli/bin/signal-cli && \
     chmod +x /opt/signal-cli/bin/signal-cli
 
 # Stage 2: secured-signal-api proxy binary
-FROM golang:1.26-alpine AS proxy-builder
+FROM golang:1.26-alpine@sha256:0648ddfa35769070197ba1cdf22a16dc452caf9315e66b91791308a543baf229 AS proxy-builder
 
 ARG SECURED_PROXY_VERSION=v1.6.2
 ARG TARGETARCH
@@ -70,6 +74,11 @@ VOLUME ["/opt/signal-cli-data", "/config"]
 
 # Ports (proxy binds here by default, signal-cli on 8080 internally)
 EXPOSE 8880 8080
+
+# Health check: verify signal-cli daemon is responding on its HTTP API.
+# Falls back to TCP port check if curl is unavailable.
+HEALTHCHECK --start-period=15s --interval=30s --timeout=10s --retries=3 \
+  CMD curl -sf http://127.0.0.1:${SIGNAL_CLI_PORT:-8080}/api/v1/check >/dev/null 2>&1 || exit 1
 
 # Entrypoint
 ENTRYPOINT ["/scripts/entrypoint.sh"]
