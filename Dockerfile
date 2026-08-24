@@ -61,6 +61,12 @@ RUN apt-get update -qq && apt-get install -y -qq \
 # Create non-root user
 RUN groupadd -r signal && useradd -r -g signal -d /opt/signal-cli-data -s /sbin/nologin signal
 
+# Runtime dirs that need to exist (and be signal-owned) before start.
+# /var/run/signal-cli holds the UNIX socket in SECURITY_MODE=unix;
+# /tmp is used by curl/gosu children.
+RUN mkdir -p /var/run/signal-cli /tmp && \
+    chown -R signal:signal /var/run/signal-cli
+
 # Copy signal-cli native binary (already extracted into /opt/signal-cli/bin/signal-cli in stage 1)
 COPY --from=signal-cli-builder /opt/signal-cli/bin/signal-cli /usr/local/bin/signal-cli
 RUN chmod +x /usr/local/bin/signal-cli
@@ -82,6 +88,16 @@ VOLUME ["/opt/signal-cli-data", "/config"]
 
 # Ports (proxy binds here by default, signal-cli on 8080 internally)
 EXPOSE 8880 8080
+
+# -----------------------------------------------------------------------------
+# WHY PID 1 RUNS AS ROOT
+# The entrypoint must (a) chown the mounted data volume to the `signal` user
+# (host bind mounts can carry arbitrary uid/gid) and (b) use gosu to drop
+# privileges into `signal` for signal-cli, secured-signal-api, and socat.
+# Every long-running process is therefore executed as `signal` via gosu;
+# root exists only for this bootstrap. Combine with cap_drop: [ALL] and
+# no-new-privileges in compose.yaml / unraid-template.xml.
+# -----------------------------------------------------------------------------
 
 # Health check — verifies the proxy endpoint is reachable, falls back to daemon
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

@@ -143,6 +143,7 @@ ${ip_filter_yaml}    cors:
 PROXYCFG
 
     log "Proxy config written to /config/config.yml"
+    chown signal:signal /config/config.yml
     log "Proxy token set: ${proxy_token:0:8}... (truncated)"
 
     # Export token and config path for proxy to pick up
@@ -160,8 +161,8 @@ case "${SECURITY_MODE}" in
         start_signal_cli "127.0.0.1"
         write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "loopback"
 
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only)..."
-        /opt/secured-signal-api/secured-signal-api &
+        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only) as user 'signal'..."
+        gosu signal /opt/secured-signal-api/secured-signal-api &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
 
@@ -169,14 +170,15 @@ case "${SECURITY_MODE}" in
         start_signal_cli "127.0.0.1"
         write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "exposed"
 
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter)..."
-        /opt/secured-signal-api/secured-signal-api &
+        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter) as user 'signal'..."
+        gosu signal /opt/secured-signal-api/secured-signal-api &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
 
     unix)
         socket_path="/var/run/signal-cli/socket"
         mkdir -p "$(dirname "${socket_path}")"
+        chown signal:signal "$(dirname "${socket_path}")"
 
         log "Starting signal-cli daemon on UNIX socket ${socket_path}..."
         gosu signal signal-cli "${SIGNAL_CLI_ARGS[@]}" \
@@ -192,9 +194,11 @@ case "${SECURITY_MODE}" in
             sleep 1
         done
 
-        # socat bridge: TCP → UNIX socket
-        log "Starting socat bridge on 127.0.0.1:${SIGNAL_CLI_PORT} → ${socket_path}..."
-        socat "TCP-LISTEN:${SIGNAL_CLI_PORT},bind=127.0.0.1,fork,reuseaddr" \
+        # socat bridge: TCP → UNIX socket.
+        # Runs as `signal` too (port >1024, so no privileged bind needed);
+        # it must be able to connect to the signal-owned UNIX socket.
+        log "Starting socat bridge on 127.0.0.1:${SIGNAL_CLI_PORT} → ${socket_path} as user 'signal'..."
+        gosu signal socat "TCP-LISTEN:${SIGNAL_CLI_PORT},bind=127.0.0.1,fork,reuseaddr" \
               "UNIX-CONNECT:${socket_path}" &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;

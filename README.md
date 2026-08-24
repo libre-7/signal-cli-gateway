@@ -82,6 +82,22 @@ unix mode:
 
 ## Environment Variables
 
+### Docker Compose: `.env` handling
+
+Copy `.env.example` to `.env` before `docker compose up`. Compose reads `.env`
+in two distinct ways, and this repo uses both:
+
+1. **Variable interpolation** — `${SIGNAL_ACCOUNT:?set SIGNAL_ACCOUNT in .env}`
+   in `compose.yaml`. The gateway refuses to start if `.env` is missing or the
+   variable unset (fail-fast instead of a silently empty account).
+2. **`env_file:`** — passes all `.env` entries into the container so the
+   entrypoint sees `SECURITY_MODE`, `PROXY_PORT`, etc.
+
+Note that compose does **not** auto-inject a `.env` file into an
+`environment:` list; the mechanisms above are how it is wired in. The
+healthcheck ports use `${PROXY_PORT:-8880}` / `${SIGNAL_CLI_PORT:-8080}`
+interpolation, so they follow custom ports set in `.env`.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | **Required** | | |

@@ -5,6 +5,10 @@
   <Registry>https://github.com/libre-7/signal-cli-gateway/pkgs/container/signal-cli-gateway</Registry>
   <Network>host</Network>
   <Privileged>false</Privileged>
+  <!-- Hardening: drop all capabilities, block privilege escalation, cap memory.
+       PID 1 stays root only for volume chown + gosu privilege drop; all
+       long-running processes (signal-cli, proxy, socat) run as user 'signal'. -->
+  <ExtraParams>--cap-drop=ALL --security-opt no-new-privileges=true --memory=512m</ExtraParams>
   <Support>https://github.com/libre-7/signal-cli-gateway</Support>
   <Project>https://github.com/libre-7/signal-cli-gateway</Project>
   <Icon>https://raw.githubusercontent.com/CorneliousJD/Docker-Templates/master/icons/signal.png</Icon>
