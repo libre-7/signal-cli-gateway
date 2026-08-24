@@ -23,6 +23,7 @@ RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI
          -O /tmp/signal-cli.tar.gz && \
     wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz.asc" \
          -O /tmp/signal-cli.tar.gz.asc && \
+    mkdir -p /tmp/gnuph && chmod 700 /tmp/gnuph && \
     GNUPGHOME=/tmp/gnuph gpg --batch --no-tty --keyserver hkps://keys.openpgp.org --recv-keys "${SIGNAL_CLI_GPG_FINGERPRINT}" && \
     GNUPGHOME=/tmp/gnuph gpg --batch --no-tty --list-keys "${SIGNAL_CLI_GPG_FINGERPRINT}" | grep -q "${SIGNAL_CLI_GPG_FINGERPRINT}" || { echo "FATAL: signing key fingerprint mismatch" >&2; exit 1; } && \
     GNUPGHOME=/tmp/gnuph gpg --batch --no-tty --verify /tmp/signal-cli.tar.gz.asc /tmp/signal-cli.tar.gz && \
