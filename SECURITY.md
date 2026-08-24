@@ -48,7 +48,7 @@ The following environment variables and settings directly affect the security po
 |---------|--------|
 | `SECURITY_MODE` | Controls which components are exposed and how. `loopback` is the minimum, `loopback-proxy` adds auth, `exposed-proxy` opens to the network. |
 | `SECURITY_PROXY_TOKEN` | Bearer token for proxy authentication. Auto-generated if empty (logged once at startup). |
-| `SECURITY_PROXY_ALLOWED_IPS` | CIDR ranges that bypass proxy auth. Default: `127.0.0.1,172.0.0.0/8,10.0.0.0/8` (narrowing tracked in issue #5). |
+| `SECURITY_PROXY_ALLOWED_IPS` | CIDR ranges that bypass proxy auth. Default: `127.0.0.1`. |
 | `SIGNAL_CLI_PORT` | Internal daemon port. Always bound to loopback in proxy modes. |
 | `SIGNAL_CLI_TRUST_NEW_IDENTITIES` | Controls automatic trust of new Signal identity keys. Default: `on-first-use`. |
 

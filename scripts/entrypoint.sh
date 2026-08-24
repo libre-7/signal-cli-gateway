@@ -87,7 +87,7 @@ start_signal_cli() {
 write_proxy_config() {
     local proxy_port="${1:-8880}"
     local proxy_token="${2:-}"
-    local proxy_allowed_ips="${3:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}"
+    local proxy_allowed_ips="${3:-127.0.0.1}"
     local proxy_bind_mode="${4:-exposed}"
 
     # Generate a random proxy token if none provided
@@ -112,9 +112,6 @@ write_proxy_config() {
         ip_filter_yaml="    ipFilter:
       allowed:
         - 127.0.0.1
-        - 10.0.0.0/8
-        - 172.16.0.0/12
-        - 192.168.0.0/16
 "
     fi
 
@@ -159,7 +156,7 @@ case "${SECURITY_MODE}" in
 
     loopback-proxy)
         start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "loopback"
+        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "loopback"
 
         log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only) as user 'signal'..."
         gosu signal /opt/secured-signal-api/secured-signal-api &
@@ -168,7 +165,7 @@ case "${SECURITY_MODE}" in
 
     exposed-proxy)
         start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "exposed"
+        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "exposed"
 
         log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter) as user 'signal'..."
         gosu signal /opt/secured-signal-api/secured-signal-api &

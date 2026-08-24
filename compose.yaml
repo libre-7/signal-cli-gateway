@@ -56,7 +56,11 @@ services:
     # declare them with defaults so the healthcheck resolves even without .env.
     environment:
       SIGNAL_ACCOUNT: ${SIGNAL_ACCOUNT:?set SIGNAL_ACCOUNT in .env}
-      SECURITY_MODE: ${SECURITY_MODE:-loopback-proxy}
+      # Default is the safest mode: signal-cli bound to 127.0.0.1 only, no proxy.
+      # To opt into the auth proxy instead, set SECURITY_MODE=loopback-proxy in
+      # .env — it exposes secured-signal-api on 0.0.0.0:${PROXY_PORT} (bearer
+      # token + IP allowlist required). See README "Security modes".
+      SECURITY_MODE: ${SECURITY_MODE:-loopback}
       # Set a fixed token in .env to avoid losing it on container restart:
       # SECURITY_PROXY_TOKEN=your-fixed-token-here
       PROXY_PORT: ${PROXY_PORT:-8880}

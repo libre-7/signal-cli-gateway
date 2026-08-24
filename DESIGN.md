@@ -326,7 +326,7 @@ SECURITY_MODE=loopback          # Options: loopback, loopback-proxy, exposed-pro
 
 # -- Security Mode: proxy auth (for loopback-proxy / exposed-proxy) --
 SECURITY_PROXY_TOKEN=          # Bearer token for proxy auth (auto-generated if empty)
-SECURITY_PROXY_ALLOWED_IPS=    # CIDRs that bypass auth (default: 127.0.0.1, 172.0.0.0/8)
+SECURITY_PROXY_ALLOWED_IPS=    # CIDRs that bypass auth (default: 127.0.0.1)
 PROXY_PORT=8880                # Proxy listener port (default: 8880)
 
 # -- Security Mode: loopback / unix --

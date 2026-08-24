@@ -56,6 +56,7 @@ RUN apt-get update -qq && apt-get install -y -qq \
         gosu \
         ca-certificates \
         curl \
+        qrencode \
         && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user

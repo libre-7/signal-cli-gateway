@@ -105,7 +105,7 @@ interpolation, so they follow custom ports set in `.env`.
 | **Security** | | |
 | `SECURITY_MODE` | `loopback` | One of: `loopback`, `loopback-proxy`, `exposed-proxy`, `unix` |
 | `SECURITY_PROXY_TOKEN` | auto-generated | Bearer token for proxy authentication |
-| `SECURITY_PROXY_ALLOWED_IPS` | `127.0.0.1,172.0.0.0/8,10.0.0.0/8` | CIDR ranges that bypass proxy auth |
+| `SECURITY_PROXY_ALLOWED_IPS` | `127.0.0.1` | CIDR ranges that bypass proxy auth |
 | **Ports** | | |
 | `SIGNAL_CLI_PORT` | `8080` | signal-cli daemon port |
 | `PROXY_PORT` | `8880` | secured-signal-api proxy port |

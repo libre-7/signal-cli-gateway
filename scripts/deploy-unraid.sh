@@ -42,13 +42,13 @@ mkdir -p "${DATA_DIR}"
 echo ""
 echo "━━━ Step 4: Link your phone ━━━"
 echo ""
-echo "A device link URI will appear below. Convert it to a QR code:"
+echo "A device link URI will appear below. Render a QR code locally:"
 echo ""
-echo "  Option A — Install qrencode (Unraid NerdPack):"
+echo "  Install qrencode (Unraid NerdPack), then run:"
 echo "    qrencode -t ANSI256 'sgnl://linkdevice?...'"
 echo ""
-echo "  Option B — Use the web by pasting the URI at:"
-echo "    https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=URI_HERE"
+echo "  (Avoid third-party QR web services — the link URI grants full access"
+echo "   to the account. Everything stays on this machine.)"
 echo ""
 echo "  Then scan from: Signal app → Settings → Linked Devices → +"
 echo ""
@@ -70,11 +70,14 @@ echo "━━━ Step 5: Start daemon ━━━"
 docker rm -f signal-cli-gateway 2>/dev/null || true
 
 # --- Step 6: Run daemon ---
+# Safe default: loopback (signal-cli on 127.0.0.1, no proxy).
+# Set SECURITY_MODE=loopback-proxy to opt into the auth proxy on
+# 0.0.0.0:8880 (exposes the HTTP API — bearer token + IP allowlist apply).
 docker run -d --name signal-cli-gateway --restart unless-stopped \
   --network host \
   -v "${DATA_DIR}:/opt/signal-cli-data" \
   -e SIGNAL_ACCOUNT="${SIGNAL_NUMBER}" \
-  -e SECURITY_MODE=loopback-proxy \
+  -e SECURITY_MODE="${SECURITY_MODE:-loopback}" \
   signal-cli-gateway:latest
 
 echo ""
