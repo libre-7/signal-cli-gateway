@@ -46,7 +46,8 @@ RUN apk add --no-cache git ca-certificates && \
     cd /build && \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
     go build -ldflags="-s -w -X main.version=${SECURED_PROXY_VERSION}" \
-    -o /opt/secured-signal-api .
+    -o /opt/secured-signal-api . && \
+    cp -r /build/data /opt/secured-signal-api-data
 
 # Stage 3: final runtime image
 FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
@@ -73,9 +74,15 @@ RUN mkdir -p /var/run/signal-cli /tmp && \
 COPY --from=signal-cli-builder /opt/signal-cli/bin/signal-cli /usr/local/bin/signal-cli
 RUN chmod +x /usr/local/bin/signal-cli
 
-# Copy secured-signal-api proxy binary (optional)
+# Copy secured-signal-api proxy binary + its data dir (defaults.yml is required:
+# without it the proxy's DEFAULT config never loads and template middleware
+# nil-panics on authenticated requests)
 COPY --from=proxy-builder /opt/secured-signal-api /opt/secured-signal-api/secured-signal-api
-RUN chmod +x /opt/secured-signal-api/secured-signal-api
+COPY --from=proxy-builder /opt/secured-signal-api-data /opt/secured-signal-api-data
+RUN chmod +x /opt/secured-signal-api/secured-signal-api && \
+    chown -R signal:signal /opt/secured-signal-api-data
+ENV DEFAULTS_PATH=/opt/secured-signal-api-data/defaults.yml \
+    FAVICON_PATH=/opt/secured-signal-api-data/favicon.ico
 
 # Copy entrypoint and helper scripts
 COPY scripts/ /scripts/
