@@ -4,7 +4,7 @@
 # proxy layer for authentication and endpoint security.
 # =============================================================================
 # Stage 1: signal-cli native binary
-FROM ubuntu:24.04 AS signal-cli-builder
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS signal-cli-builder
 
 ARG SIGNAL_CLI_VERSION=0.14.5
 
@@ -21,7 +21,7 @@ RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI
     chmod +x /opt/signal-cli/bin/signal-cli
 
 # Stage 2: secured-signal-api proxy binary
-FROM golang:1.26-alpine AS proxy-builder
+FROM golang:1.26-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS proxy-builder
 
 ARG SECURED_PROXY_VERSION=v1.6.2
 ARG TARGETARCH
@@ -36,7 +36,7 @@ RUN apk add --no-cache git ca-certificates && \
     -o /opt/secured-signal-api .
 
 # Stage 3: final runtime image
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 # Install runtime deps: socat for unix-socket mode, gosu for non-root
 RUN apt-get update -qq && apt-get install -y -qq \

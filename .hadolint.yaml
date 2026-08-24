@@ -1,0 +1,6 @@
+ignored:
+  - DL3008   # Pin versions in apt-get install (pinned via base image SHA)
+  - DL3059   # Multiple consecutive RUN instructions (keeps layers cacheable)
+  - DL3015   # --no-install-recommends (pre-existing; hardening card)
+  - DL3003   # WORKDIR vs cd (pre-existing; builder-stage style)
+  - DL3018   # Pin apk versions (pre-existing; supply-chain card)

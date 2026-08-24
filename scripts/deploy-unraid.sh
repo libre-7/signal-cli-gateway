@@ -8,7 +8,7 @@
 set -euo pipefail
 
 # === CONFIGURATION — EDIT THESE ===
-SIGNAL_NUMBER="+123****7890"
+SIGNAL_NUMBER="${SIGNAL_NUMBER:-+123****7890}"
 DEVICE_NAME="HermesAgent"
 DATA_DIR="/mnt/user/appdata/signal-cli-gateway"
 GIT_REPO="https://github.com/libre-7/signal-cli-gateway.git"
