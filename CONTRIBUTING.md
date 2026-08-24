@@ -51,6 +51,28 @@ Hyphens, lowercase, descriptive.
 - The `:latest` tag follows `main`
 - SHA-pinned tags are immutable
 
+## Dependency version bumps
+
+Dependabot does **not** track the pinned versions in this repo:
+
+- `ARG SIGNAL_CLI_VERSION` in the `Dockerfile`
+- `ARG SECURED_PROXY_VERSION` in the `Dockerfile`
+- Base image digest pins (`FROM ...@sha256:...`)
+- GitHub Action SHA pins in `.github/workflows/`
+
+These must be bumped manually. Recommended cadence: **quarterly**, or
+sooner when a security release lands (signal-cli especially — releases
+older than ~3 months may break against Signal server protocol changes).
+
+Manual bump procedure:
+
+1. Check latest releases:
+   - signal-cli: https://github.com/AsamK/signal-cli/releases
+   - secured-signal-api: https://github.com/CodeShellDev/secured-signal-api/releases
+2. Update the `ARG ..._VERSION=` values in the `Dockerfile`.
+3. Recompute base image digests (`docker buildx imagetools inspect <image>`) and update the `@sha256:` pins.
+4. Rebuild locally and run a smoke test (link + send) before opening the PR.
+
 ## Registry flow
 
 On push to `main`, the image is pushed to GHCR (`ghcr.io/libre-7/signal-cli-gateway`).

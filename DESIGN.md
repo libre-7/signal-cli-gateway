@@ -282,8 +282,8 @@ infrastructure.
 
 | Mode | `SECURITY_MODE` | Components Exposed | Auth | Use Case |
 |------|-----------------|-------------------|------|----------|
-| **loopback** | `loopback` | `127.0.0.1:8080` | None | Hermes on host networking. Trusted environment. |
-| **loopback-proxy** | `loopback-proxy` | `0.0.0.0:8880` (proxy, ipFilter: local-only) | Bearer + IP allowlist | Hermes on host networking + auth. Default recommended. |
+| **loopback** | `loopback` | `127.0.0.1:8080` | None | Hermes on host networking. Trusted environment. Shipped default. |
+| **loopback-proxy** | `loopback-proxy` | `0.0.0.0:8880` (proxy, ipFilter: local-only) | Bearer + IP allowlist | Hermes on host networking + auth. Recommended for production. |
 | **exposed-proxy** | `exposed-proxy` | `0.0.0.0:8880` (proxy only) | Bearer + IP allowlist | Multi-host setups, Kubernetes, cloud. Proxy handles access control. |
 | **unix** | `unix` | `/var/run/signal-cli/socket` | File permissions + socat bridge | Maximum isolation on single host. |
 
@@ -331,13 +331,15 @@ PROXY_PORT=8880                # Proxy listener port (default: 8880)
 
 # -- Security Mode: loopback / unix --
 SIGNAL_CLI_PORT=8080           # signal-cli daemon port (default: 8080)
-SIGNAL_CLI_BIND=127.0.0.1     # Bind address (default: 127.0.0.1)
 
 # -- Signal daemon options --
 SIGNAL_CLI_TRUST_NEW_IDENTITIES=on-first-use  # on-first-use, always, never
-SIGNAL_CLI_IGNORE_ATTACHMENTS=false
-SIGNAL_CLI_IGNORE_STORIES=true
 ```
+
+Note: `SIGNAL_CLI_BIND` is not user-configurable — signal-cli always binds
+`127.0.0.1` in every mode. `SIGNAL_CLI_IGNORE_ATTACHMENTS` /
+`SIGNAL_CLI_IGNORE_STORIES` are JVM-only flags not supported by the native
+signal-cli binary and are intentionally absent.
 
 ---
 
@@ -365,8 +367,11 @@ clear error message rather than silently degrading security.
 
 ### Credentials at rest
 The config volume (`/opt/signal-cli-data`) contains the Signal identity keys.
-The container runs as a non-root user. No other container on the host can read
-this volume without explicit Docker volume sharing.
+The entrypoint starts as root only to prepare directories and then drops the
+daemon, proxy, and socat processes to an unprivileged `signal` user via
+`gosu` (compose additionally enforces `cap_drop: ALL`,
+`no-new-privileges`, and a read-only root filesystem). No other container on
+the host can read this volume without explicit Docker volume sharing.
 
 ---
 
@@ -376,12 +381,15 @@ The Dockerfile uses **multi-stage builds** to minimize final image size:
 
 ```
 Stage 1: signal-cli-builder
-  - Downloads signal-cli native binary from GitHub releases
+  - Downloads the official signal-cli native-binary release tarball from
+    GitHub releases and verifies its GPG signature against the pinned
+    AsamK release key fingerprint
   - Extracts to /opt/signal-cli
 
 Stage 2: secured-proxy-builder (conditional)
-  - Downloads secured-signal-api binary from GitHub releases
-  - Extracts to /opt/secured-proxy
+  - Git-clones secured-signal-api at a pinned release tag and builds it
+    from source with the Go toolchain
+  - Output binary at /opt/secured-signal-api/secured-signal-api
 
 Stage 3: final
   - Ubuntu 24.04 (glibc required for native signal-cli)

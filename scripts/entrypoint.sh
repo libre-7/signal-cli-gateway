@@ -154,20 +154,19 @@ case "${SECURITY_MODE}" in
         start_signal_cli "127.0.0.1"
         ;;
 
-    loopback-proxy)
+    loopback-proxy|exposed-proxy)
+        # Fail fast if the image was built without proxy support
+        [ -x /opt/secured-signal-api/secured-signal-api ] \
+            || die "SECURITY_MODE=${SECURITY_MODE} requires the proxy binary at /opt/secured-signal-api/secured-signal-api, which is missing from this image"
+
         start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "loopback"
-
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only) as user 'signal'..."
-        gosu signal /opt/secured-signal-api/secured-signal-api &
-        CHILDREN_PIDS="${CHILDREN_PIDS} $!"
-        ;;
-
-    exposed-proxy)
-        start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "exposed"
-
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter) as user 'signal'..."
+        if [ "${SECURITY_MODE}" = "exposed-proxy" ]; then
+            write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "exposed"
+            log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter) as user 'signal'..."
+        else
+            write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "loopback"
+            log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only) as user 'signal'..."
+        fi
         gosu signal /opt/secured-signal-api/secured-signal-api &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
