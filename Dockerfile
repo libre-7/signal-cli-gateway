@@ -6,17 +6,29 @@
 # Stage 1: signal-cli native binary
 FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS signal-cli-builder
 
-ARG SIGNAL_CLI_VERSION=0.14.5
+ARG SIGNAL_CLI_VERSION=0.14.7
 
-RUN apt-get update -qq && apt-get install -y -qq wget ca-certificates && rm -rf /var/lib/apt/lists/*
+# AsamK/signal-cli release signing key.
+# Fingerprint verified against keys.openpgp.org and keyserver.ubuntu.com
+# (both return the verified-email UID "AsamK <asamk@gmx.de>" for this key),
+# and cross-checked against the issuer-fingerprint subpacket in the release
+# .asc signatures themselves.
+ARG SIGNAL_CLI_GPG_FINGERPRINT=FA10826A74907F9EC6BBB7FC2BA2CD21B5B09570
 
-# signal-cli 0.14.4+ native tarball extracts as a single flat file
-# (signal-cli-X.Y.Z-Linux-native.tar.gz contains just ./signal-cli)
+RUN apt-get update -qq && apt-get install -y -qq wget ca-certificates gnupg && rm -rf /var/lib/apt/lists/*
+
+# Download tarball + detached signature, import the pinned release key,
+# and verify. Any mismatch or missing signature fails the build.
 RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz" \
          -O /tmp/signal-cli.tar.gz && \
+    wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}-Linux-native.tar.gz.asc" \
+         -O /tmp/signal-cli.tar.gz.asc && \
+    GNUPGHOME=/tmp/gnuph gpg --batch --no-tty --keyserver hkps://keys.openpgp.org --recv-keys "${SIGNAL_CLI_GPG_FINGERPRINT}" && \
+    GNUPGHOME=/tmp/gnuph gpg --batch --no-tty --list-keys "${SIGNAL_CLI_GPG_FINGERPRINT}" | grep -q "${SIGNAL_CLI_GPG_FINGERPRINT}" || { echo "FATAL: signing key fingerprint mismatch" >&2; exit 1; } && \
+    GNUPGHOME=/tmp/gnuph gpg --batch --no-tty --verify /tmp/signal-cli.tar.gz.asc /tmp/signal-cli.tar.gz && \
     mkdir -p /opt/signal-cli/bin && \
     tar xzf /tmp/signal-cli.tar.gz -C /opt/signal-cli/bin && \
-    rm /tmp/signal-cli.tar.gz && \
+    rm -rf /tmp/gnuph /tmp/signal-cli.tar.gz /tmp/signal-cli.tar.gz.asc && \
     test -x /opt/signal-cli/bin/signal-cli && \
     chmod +x /opt/signal-cli/bin/signal-cli
 
