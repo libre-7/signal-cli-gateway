@@ -70,9 +70,16 @@ services:
         required: false
     volumes:
       - ./signal-cli-data:/opt/signal-cli-data
-    # Hardening: drop every capability, block privilege escalation, read-only
-    # rootfs with writable tmpfs for the runtime dirs. The data volume stays rw.
+    # Hardening: drop every capability except the minimum the entrypoint needs
+    # (chown of the data volume; setuid/setgid so gosu can drop to `signal`),
+    # block privilege escalation, read-only rootfs with writable tmpfs.
     cap_drop: [ALL]
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     read_only: true
