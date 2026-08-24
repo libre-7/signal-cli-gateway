@@ -2,11 +2,20 @@
 # signal-cli-gateway — Docker Compose
 # =============================================================================
 # Quick start:
-#   1. mkdir -p signal-cli-data
-#   2. docker compose run --rm link
-#   3. Scan QR from Signal app → Settings → Linked Devices
-#   4. Edit SIGNAL_ACCOUNT in services.gateway.environment below
+#   1. cp .env.example .env   (set SIGNAL_ACCOUNT and SECURITY_PROXY_TOKEN)
+#   2. mkdir -p signal-cli-data
+#   3. docker compose run --rm link
+#   4. Scan QR from Signal app → Settings → Linked Devices
 #   5. docker compose up -d
+#
+# NOTE on environment handling:
+#   Compose does NOT auto-inject a `.env` file into container `environment`
+#   lists — the top-level `.env` file is only used for VARIABLE INTERPOLATION
+#   inside this file (${VAR} below). We use both mechanisms deliberately:
+#     - `${SIGNAL_ACCOUNT:?...}` interpolation fails fast if .env is missing,
+#       so the gateway can never start with an unset account.
+#     - `env_file: [.env]` passes the whole file into the container so the
+#       entrypoint sees SECURITY_MODE, PROXY_PORT, etc. directly.
 # =============================================================================
 
 name: signal-cli-gateway
@@ -16,10 +25,21 @@ services:
     image: ghcr.io/libre-7/signal-cli-gateway:latest
     build: .
     container_name: signal-cli-link
+    env_file:
+      - path: .env
+        required: false
     environment:
       - DEVICE_NAME=SignalGateway
     volumes:
       - ./signal-cli-data:/opt/signal-cli-data
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
     entrypoint: ["bash", "/scripts/link-account.sh"]
     stdin_open: true
     tty: true
@@ -32,15 +52,49 @@ services:
     container_name: signal-cli-gateway
     restart: unless-stopped
     network_mode: host
+    # Interpolation requires these to be defined at compose-parse time;
+    # declare them with defaults so the healthcheck resolves even without .env.
     environment:
-      - SIGNAL_ACCOUNT=+123****7890
-      - SECURITY_MODE=loopback-proxy
-      # Set a fixed token to avoid losing it on container restart:
-      # - SECURITY_PROXY_TOKEN=your-fixed-token-here
+      SIGNAL_ACCOUNT: ${SIGNAL_ACCOUNT:?set SIGNAL_ACCOUNT in .env}
+      # Default is the safest mode: signal-cli bound to 127.0.0.1 only, no proxy.
+      # To opt into the auth proxy instead, set SECURITY_MODE=loopback-proxy in
+      # .env — it exposes secured-signal-api on 0.0.0.0:${PROXY_PORT} (bearer
+      # token + IP allowlist required). See README "Security modes".
+      SECURITY_MODE: ${SECURITY_MODE:-loopback}
+      # Set a fixed token in .env to avoid losing it on container restart:
+      # SECURITY_PROXY_TOKEN=your-fixed-token-here
+      PROXY_PORT: ${PROXY_PORT:-8880}
+      SIGNAL_CLI_PORT: ${SIGNAL_CLI_PORT:-8080}
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./signal-cli-data:/opt/signal-cli-data
+    # Hardening: drop every capability except the minimum the entrypoint needs
+    # (chown of the data volume; setuid/setgid so gosu can drop to `signal`),
+    # block privilege escalation, read-only rootfs with writable tmpfs.
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777,exec
+      - /var/run/signal-cli:size=16m,mode=0755,uid=999,gid=999
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8880/api/v1/check || curl -sf http://127.0.0.1:8080/api/v1/check || exit 1"]
+      # unix mode speaks JSON-RPC over the socket/bridge, not HTTP — use a
+      # version probe through the socat bridge; other modes use HTTP /check.
+      test: ["CMD-SHELL", "printf '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"version\"}\\n' | socat -T3 - UNIX-CONNECT:/var/run/signal-cli/socket 2>/dev/null | grep -q result || curl -sf http://127.0.0.1:${PROXY_PORT:-8880}/api/v1/check || curl -sf http://127.0.0.1:${SIGNAL_CLI_PORT:-8080}/api/v1/check || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

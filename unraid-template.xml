@@ -5,6 +5,10 @@
   <Registry>https://github.com/libre-7/signal-cli-gateway/pkgs/container/signal-cli-gateway</Registry>
   <Network>host</Network>
   <Privileged>false</Privileged>
+  <!-- Hardening: drop all capabilities, block privilege escalation, cap memory.
+       PID 1 stays root only for volume chown + gosu privilege drop; all
+       long-running processes (signal-cli, proxy, socat) run as user 'signal'. -->
+  <ExtraParams>--cap-drop=ALL --security-opt no-new-privileges=true --memory=512m</ExtraParams>
   <Support>https://github.com/libre-7/signal-cli-gateway</Support>
   <Project>https://github.com/libre-7/signal-cli-gateway</Project>
   <Icon>https://raw.githubusercontent.com/CorneliousJD/Docker-Templates/master/icons/signal.png</Icon>
@@ -51,7 +55,7 @@ Then scan the QR code from Signal app → Settings → Linked Devices.</Overview
 
   <Config Name="SECURITY_PROXY_TOKEN" Target="SECURITY_PROXY_TOKEN" Mode="v" Type="Variable" Display="always" Required="false" Mask="true" Default="" Description="Bearer token for proxy authentication. Auto-generated if empty (logged at startup)."/>
 
-  <Config Name="SECURITY_PROXY_ALLOWED_IPS" Target="SECURITY_PROXY_ALLOWED_IPS" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="127.0.0.1,172.0.0.0/8,10.0.0.0/8" Description="CIDR ranges that bypass proxy auth. Hermes container IP should be included."/>
+  <Config Name="SECURITY_PROXY_ALLOWED_IPS" Target="SECURITY_PROXY_ALLOWED_IPS" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="127.0.0.1" Description="CIDR ranges that bypass proxy auth. Add your client IP/CIDR if needed."/>
 
   <Config Name="SIGNAL_CLI_PORT" Target="SIGNAL_CLI_PORT" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="8080" Description="signal-cli daemon HTTP port (internal, loopback-bound)."/>
 

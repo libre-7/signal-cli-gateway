@@ -25,32 +25,38 @@ docker run --rm -it \
 
 # Scan the QR code from Signal → Settings → Linked Devices
 
-# 4. Edit SIGNAL_ACCOUNT in compose.yaml, then start
-docker compose up -d
-```
-
 # 4. Configure Hermes
-# SIGNAL_HTTP_URL=http://127.0.0.1:8880
-# SIGNAL_ACCOUNT=+123****7890
+# In your Hermes .env:
+#   SIGNAL_HTTP_URL=http://127.0.0.1:8880
+#   SIGNAL_ACCOUNT=+123****7890
 # (Hermes connects to the proxy — IP allowlist bypasses auth)
+
+# 5. Edit SIGNAL_ACCOUNT in compose.yaml, then start
+docker compose up -d
 ```
 
 ## Security Modes
 
 | Mode | Env Var | signal-cli | Exposed | Auth | Network | Use Case |
 |------|---------|------------|---------|------|---------|----------|
-| **Loopback** | `loopback` | 127.0.0.1:8080 | ❌ | None | Host | Hermes on host networking, trusted LAN |
-| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy, ipFilter: local-only) | Bearer + IP allowlist + ipFilter | Host | ✅ **Recommended default** |
+| **Loopback** | `loopback` | 127.0.0.1:8080 | ❌ | None | Host | Hermes on host networking, trusted LAN — ✅ **Shipped default** |
+| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy, ipFilter: local-only) | Bearer + IP allowlist + ipFilter | Host | ✅ **Recommended for production** |
 | **Exposed + Proxy** | `exposed-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy) | Bearer + IP allowlist | Bridge or Host | Multi-host, Kubernetes, cloud |
 | **UNIX Socket** | `unix` | `/var/run/signal-cli/socket` | Socat bridge 127.0.0.1:8080 | File perms | Host | Maximum process isolation |
 
 > **Network note:** Modes that bind to `127.0.0.1` (loopback, loopback-proxy, unix) require `--network host` because `127.0.0.1` inside a bridge network is unreachable from outside the container. `exposed-proxy` works on bridge — the proxy binds `0.0.0.0:8880`, so port mapping (`-p 8880:8880`) works, and signal-cli stays on loopback internally.
 
-### Why loopback-proxy is the default
+### Why loopback is the shipped default (and when to move to loopback-proxy)
+
+`compose.yaml` and the Unraid deploy script default to `loopback`: signal-cli
+binds to 127.0.0.1 and nothing else is exposed, which is safe on a trusted
+single-host setup with host networking.
 
 1. **signal-cli is never exposed** — binds to 127.0.0.1, unreachable from other containers
-2. **Authentication on every proxied request** — Bearer token or Basic Auth required
-3. **Dangerous management endpoints unreachable** — signal-cli binds to loopback (`127.0.0.1:8080`). The proxy only forwards requests to the JSON-RPC endpoint (`/api/v1/rpc`), and management operations (`register`, `link`, `unregister`) are CLI-only — they don't exist as HTTP endpoints. Token auth + IP allowlist prevent unauthorized access.
+2. **No ports opened at all in loopback mode** — smallest possible attack surface
+3. **Upgrade path:** set `SECURITY_MODE=loopback-proxy` when other containers or
+   remote clients need access — then every proxied request requires a Bearer
+   token or Basic Auth, and an ipFilter restricts the proxy to local callers
 4. **IP allowlist for Hermes** — trusted IPs bypass auth so Hermes' `signal.py` adapter works unpatched
 5. **Auto-generated random token** — if you don't set `SECURITY_PROXY_TOKEN`, one is generated and logged at startup
 
@@ -82,6 +88,22 @@ unix mode:
 
 ## Environment Variables
 
+### Docker Compose: `.env` handling
+
+Copy `.env.example` to `.env` before `docker compose up`. Compose reads `.env`
+in two distinct ways, and this repo uses both:
+
+1. **Variable interpolation** — `${SIGNAL_ACCOUNT:?set SIGNAL_ACCOUNT in .env}`
+   in `compose.yaml`. The gateway refuses to start if `.env` is missing or the
+   variable unset (fail-fast instead of a silently empty account).
+2. **`env_file:`** — passes all `.env` entries into the container so the
+   entrypoint sees `SECURITY_MODE`, `PROXY_PORT`, etc.
+
+Note that compose does **not** auto-inject a `.env` file into an
+`environment:` list; the mechanisms above are how it is wired in. The
+healthcheck ports use `${PROXY_PORT:-8880}` / `${SIGNAL_CLI_PORT:-8080}`
+interpolation, so they follow custom ports set in `.env`.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | **Required** | | |
@@ -89,7 +111,7 @@ unix mode:
 | **Security** | | |
 | `SECURITY_MODE` | `loopback` | One of: `loopback`, `loopback-proxy`, `exposed-proxy`, `unix` |
 | `SECURITY_PROXY_TOKEN` | auto-generated | Bearer token for proxy authentication |
-| `SECURITY_PROXY_ALLOWED_IPS` | `127.0.0.1,172.0.0.0/8,10.0.0.0/8` | CIDR ranges that bypass proxy auth |
+| `SECURITY_PROXY_ALLOWED_IPS` | `127.0.0.1` | CIDR ranges that bypass proxy auth |
 | **Ports** | | |
 | `SIGNAL_CLI_PORT` | `8080` | signal-cli daemon port |
 | `PROXY_PORT` | `8880` | secured-signal-api proxy port |
@@ -154,11 +176,12 @@ This prints a URI like:
 sgnl://linkdevice?uuid=XXXX&pub_key=YYYY
 ```
 
-On a headless system, convert to a QR:
+On a headless system, the link script prints an ANSI QR code itself (offline,
+via `qrencode` — no third-party service is contacted). To render one manually:
+
 ```bash
-# Install qrencode or use a container:
 echo 'sgnl://linkdevice?uuid=XXXX&pub_key=YYYY' | \
-  docker run --rm -i appropriate/curl qrencode -t ANSI256
+  docker run --rm -i signal-cli-gateway qrencode -t ANSI256
 ```
 
 Scan from your phone: **Signal → Settings → Linked Devices → +**.

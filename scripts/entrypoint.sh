@@ -87,7 +87,7 @@ start_signal_cli() {
 write_proxy_config() {
     local proxy_port="${1:-8880}"
     local proxy_token="${2:-}"
-    local proxy_allowed_ips="${3:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}"
+    local proxy_allowed_ips="${3:-127.0.0.1}"
     local proxy_bind_mode="${4:-exposed}"
 
     # Generate a random proxy token if none provided
@@ -112,9 +112,6 @@ write_proxy_config() {
         ip_filter_yaml="    ipFilter:
       allowed:
         - 127.0.0.1
-        - 10.0.0.0/8
-        - 172.16.0.0/12
-        - 192.168.0.0/16
 "
     fi
 
@@ -143,6 +140,7 @@ ${ip_filter_yaml}    cors:
 PROXYCFG
 
     log "Proxy config written to /config/config.yml"
+    chown signal:signal /config/config.yml
     log "Proxy token set: ${proxy_token:0:8}... (truncated)"
 
     # Export token and config path for proxy to pick up
@@ -156,27 +154,27 @@ case "${SECURITY_MODE}" in
         start_signal_cli "127.0.0.1"
         ;;
 
-    loopback-proxy)
+    loopback-proxy|exposed-proxy)
+        # Fail fast if the image was built without proxy support
+        [ -x /opt/secured-signal-api/secured-signal-api ] \
+            || die "SECURITY_MODE=${SECURITY_MODE} requires the proxy binary at /opt/secured-signal-api/secured-signal-api, which is missing from this image"
+
         start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "loopback"
-
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only)..."
-        /opt/secured-signal-api/secured-signal-api &
-        CHILDREN_PIDS="${CHILDREN_PIDS} $!"
-        ;;
-
-    exposed-proxy)
-        start_signal_cli "127.0.0.1"
-        write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1,172.0.0.0/8,10.0.0.0/8}" "exposed"
-
-        log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter)..."
-        /opt/secured-signal-api/secured-signal-api &
+        if [ "${SECURITY_MODE}" = "exposed-proxy" ]; then
+            write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "exposed"
+            log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (no ipFilter) as user 'signal'..."
+        else
+            write_proxy_config "${PROXY_PORT:-8880}" "${SECURITY_PROXY_TOKEN:-}" "${SECURITY_PROXY_ALLOWED_IPS:-127.0.0.1}" "loopback"
+            log "Starting secured-signal-api proxy on 0.0.0.0:${PROXY_PORT:-8880} (ipFilter: loopback-only) as user 'signal'..."
+        fi
+        gosu signal /opt/secured-signal-api/secured-signal-api &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
 
     unix)
         socket_path="/var/run/signal-cli/socket"
         mkdir -p "$(dirname "${socket_path}")"
+        chown signal:signal "$(dirname "${socket_path}")"
 
         log "Starting signal-cli daemon on UNIX socket ${socket_path}..."
         gosu signal signal-cli "${SIGNAL_CLI_ARGS[@]}" \
@@ -192,13 +190,46 @@ case "${SECURITY_MODE}" in
             sleep 1
         done
 
-        # socat bridge: TCP → UNIX socket
-        log "Starting socat bridge on 127.0.0.1:${SIGNAL_CLI_PORT} → ${socket_path}..."
-        socat "TCP-LISTEN:${SIGNAL_CLI_PORT},bind=127.0.0.1,fork,reuseaddr" \
+        # socat bridge: TCP → UNIX socket.
+        # Runs as `signal` too (port >1024, so no privileged bind needed);
+        # it must be able to connect to the signal-owned UNIX socket.
+        log "Starting socat bridge on 127.0.0.1:${SIGNAL_CLI_PORT} → ${socket_path} as user 'signal'..."
+        gosu signal socat "TCP-LISTEN:${SIGNAL_CLI_PORT},bind=127.0.0.1,fork,reuseaddr" \
               "UNIX-CONNECT:${socket_path}" &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
+
 esac
+
+# --- Post-start readiness probe ---------------------------------------------
+# In unix mode the daemon speaks JSON-RPC over the socket, not HTTP, so an
+# /api/v1/check GET would always fail. Verify readiness by issuing a real
+# JSON-RPC `version` request through the bridge instead.
+log "Waiting for gateway to be ready..."
+case "${SECURITY_MODE}" in
+    unix)
+        ready=0
+        for i in $(seq 1 30); do
+            if printf '{"jsonrpc":"2.0","id":1,"method":"version"}\n' \
+                | timeout 3 gosu signal socat - "UNIX-CONNECT:/var/run/signal-cli/socket" 2>/dev/null \
+                | grep -q '"result"'; then
+                ready=1; break
+            fi
+            sleep 1
+        done
+        [ "$ready" = 1 ] || die "gateway failed readiness check (unix mode)"
+        ;;
+    *)
+        for i in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${SIGNAL_CLI_PORT}/api/v1/check" >/dev/null 2>&1; then
+                ready=1; break
+            fi
+            sleep 1
+        done
+        [ "$ready" = 1 ] || die "gateway failed readiness check"
+        ;;
+esac
+log "Gateway is ready."
 
 # --- Wait for all children --------------------------------------------------
 log "All processes started. Monitoring children (PIDs: ${CHILDREN_PIDS})..."
