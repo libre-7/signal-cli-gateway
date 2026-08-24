@@ -198,7 +198,38 @@ case "${SECURITY_MODE}" in
               "UNIX-CONNECT:${socket_path}" &
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
         ;;
+
 esac
+
+# --- Post-start readiness probe ---------------------------------------------
+# In unix mode the daemon speaks JSON-RPC over the socket, not HTTP, so an
+# /api/v1/check GET would always fail. Verify readiness by issuing a real
+# JSON-RPC `version` request through the bridge instead.
+log "Waiting for gateway to be ready..."
+case "${SECURITY_MODE}" in
+    unix)
+        ready=0
+        for i in $(seq 1 30); do
+            if printf '{"jsonrpc":"2.0","id":1,"method":"version"}\n' \
+                | timeout 3 gosu signal socat - "UNIX-CONNECT:/var/run/signal-cli/socket" 2>/dev/null \
+                | grep -q '"result"'; then
+                ready=1; break
+            fi
+            sleep 1
+        done
+        [ "$ready" = 1 ] || die "gateway failed readiness check (unix mode)"
+        ;;
+    *)
+        for i in $(seq 1 30); do
+            if curl -sf "http://127.0.0.1:${SIGNAL_CLI_PORT}/api/v1/check" >/dev/null 2>&1; then
+                ready=1; break
+            fi
+            sleep 1
+        done
+        [ "$ready" = 1 ] || die "gateway failed readiness check"
+        ;;
+esac
+log "Gateway is ready."
 
 # --- Wait for all children --------------------------------------------------
 log "All processes started. Monitoring children (PIDs: ${CHILDREN_PIDS})..."

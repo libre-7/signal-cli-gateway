@@ -92,7 +92,9 @@ services:
           memory: 512m
           cpus: "1.0"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:${PROXY_PORT:-8880}/api/v1/check || curl -sf http://127.0.0.1:${SIGNAL_CLI_PORT:-8080}/api/v1/check || exit 1"]
+      # unix mode speaks JSON-RPC over the socket/bridge, not HTTP — use a
+      # version probe through the socat bridge; other modes use HTTP /check.
+      test: ["CMD-SHELL", "printf '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"version\"}\\n' | socat -T3 - UNIX-CONNECT:/var/run/signal-cli/socket 2>/dev/null | grep -q result || curl -sf http://127.0.0.1:${PROXY_PORT:-8880}/api/v1/check || curl -sf http://127.0.0.1:${SIGNAL_CLI_PORT:-8080}/api/v1/check || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
