@@ -17,6 +17,12 @@ docker build -t signal-cli-gateway .
 
 # 3. Link your phone (one-time setup)
 mkdir -p signal-cli-data
+
+# With Docker Compose (recommended):
+cp .env.example .env       # then set SIGNAL_ACCOUNT
+docker compose run --rm link
+
+# Or with a plain docker run:
 docker run --rm -it \
   -v "$(pwd)/signal-cli-data:/opt/signal-cli-data" \
   -e DEVICE_NAME=HermesAgent \
@@ -40,11 +46,30 @@ docker compose up -d
 | Mode | Env Var | signal-cli | Exposed | Auth | Network | Use Case |
 |------|---------|------------|---------|------|---------|----------|
 | **Loopback** | `loopback` | 127.0.0.1:8080 | ❌ | None | Host | Hermes on host networking, trusted LAN — ✅ **Shipped default** |
-| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy, ipFilter: local-only) | Bearer + IP allowlist + ipFilter | Host | ✅ **Recommended for production** |
+| **Loopback + Proxy** | `loopback-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy, ipFilter: local-only) | Bearer + IP allowlist + ipFilter | Host | Add auth on a single host when another client needs access |
 | **Exposed + Proxy** | `exposed-proxy` | 127.0.0.1:8080 | 0.0.0.0:8880 (proxy) | Bearer + IP allowlist | Bridge or Host | Multi-host, Kubernetes, cloud |
 | **UNIX Socket** | `unix` | `/var/run/signal-cli/socket` | Socat bridge 127.0.0.1:8080 | File perms | Host | Maximum process isolation |
 
-> **Network note:** Modes that bind to `127.0.0.1` (loopback, loopback-proxy, unix) require `--network host` because `127.0.0.1` inside a bridge network is unreachable from outside the container. `exposed-proxy` works on bridge — the proxy binds `0.0.0.0:8880`, so port mapping (`-p 8880:8880`) works, and signal-cli stays on loopback internally.
+> **Network note:** `loopback`, `loopback-proxy`, and `unix` **require `--network host`** —
+> those modes bind signal-cli to `127.0.0.1`, which is unreachable from outside a bridge
+> network. `exposed-proxy` is the one mode that works on a bridge network, because the proxy
+> binds `0.0.0.0:8880` and you publish it with a port mapping:
+>
+> ```bash
+> docker run -d --name signal-cli-gateway --restart unless-stopped \
+>   -p 8880:8880:8880 \
+>   -v "$(pwd)/signal-cli-data:/opt/signal-cli-data" \
+>   -e SIGNAL_ACCOUNT=+123****7890 \
+>   -e SECURITY_MODE=exposed-proxy \
+>   -e SECURITY_PROXY_TOKEN=your-fixed-token-here \
+>   signal-cli-gateway
+> ```
+>
+> With `exposed-proxy` on a bridge, the proxy is reachable from **any** host that can route to
+> the published port — put a Bearer token on it and keep `SECURITY_PROXY_ALLOWED_IPS` narrow.
+
+> **Platform note:** this image is **amd64-only**. signal-cli publishes no arm64 build of its
+> native Linux tarball, so the CI workflow builds `linux/amd64` and no arm64 image is produced.
 
 ### Why loopback is the shipped default (and when to move to loopback-proxy)
 
@@ -119,6 +144,9 @@ interpolation, so they follow custom ports set in `.env`.
 | `SIGNAL_CLI_TRUST_NEW_IDENTITIES` | `on-first-use` | `on-first-use`, `always`, `never` |
 | **Account linking** | | |
 | `DEVICE_NAME` | `SignalGateway` | Name shown in Signal's linked device list |
+| **Proxy config** | | |
+| `CUSTOM_PROXY_CONFIG` | `true` | `true` (default): a `config.yml` mounted at `/config/config.yml` is used as-is and never overwritten. `false`: always regenerate the built-in default. |
+| `LOG_LEVEL` | `info` | Proxy log level: `info`, `debug`, `warn`, `error` |
 
 ## Hermes Agent Integration
 
@@ -145,14 +173,20 @@ works as-is when the IP is allowlisted.
 
 Mount your own `config.yml` to `/config/config.yml` to override default
 settings — add rate limiting, field policies, message templates, etc.
+The container **detects a mounted file and uses it as-is** instead of
+generating its default; your config is never overwritten at startup.
 See [secured-signal-api docs](https://codeshelldev.github.io/secured-signal-api)
 for the full configuration reference.
+
+> Mount it read-only (`-v "$(pwd)/custom-config.yml:/config/config.yml:ro"`)
+> so the container cannot write to it. Set `CUSTOM_PROXY_CONFIG=false` if
+> you want the built-in default regenerated over the top.
 
 ```bash
 docker run -d --name signal-cli-gateway --restart unless-stopped \
   --network host \
   -v "$(pwd)/signal-cli-data:/opt/signal-cli-data" \
-  -v "$(pwd)/custom-config.yml:/config/config.yml" \
+  -v "$(pwd)/custom-config.yml:/config/config.yml:ro" \
   -e SIGNAL_ACCOUNT=+123****7890 \
   -e SECURITY_MODE=loopback-proxy \
   signal-cli-gateway
@@ -200,6 +234,13 @@ docker build --target signal-cli-builder -t signal-cli-gateway:no-proxy .
 
 See [DESIGN.md](DESIGN.md) for the full security analysis, threat model, and
 comparison of all approaches considered.
+
+## Audit
+
+[AUDIT.md](AUDIT.md) holds the most recent comprehensive code review (2026-09-27):
+16 findings, all fixed and verified on real Docker, with the full verification
+record. It also carries forward the 2026-08-21 review's disposition and a list of
+suspicions that were investigated and **refuted**, so they aren't re-audited.
 
 ## License
 

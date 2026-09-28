@@ -73,28 +73,56 @@ docker rm -f signal-cli-gateway 2>/dev/null || true
 # Safe default: loopback (signal-cli on 127.0.0.1, no proxy).
 # Set SECURITY_MODE=loopback-proxy to opt into the auth proxy on
 # 0.0.0.0:8880 (exposes the HTTP API — bearer token + IP allowlist apply).
+DEPLOY_MODE="${SECURITY_MODE:-loopback}"
 docker run -d --name signal-cli-gateway --restart unless-stopped \
   --network host \
   -v "${DATA_DIR}:/opt/signal-cli-data" \
   -e SIGNAL_ACCOUNT="${SIGNAL_NUMBER}" \
-  -e SECURITY_MODE="${SECURITY_MODE:-loopback}" \
+  -e SECURITY_MODE="${DEPLOY_MODE}" \
   signal-cli-gateway:latest
 
 echo ""
 echo "━━━ Step 6: Verify ━━━"
-sleep 3
+echo "Mode: ${DEPLOY_MODE}"
+
+# Give the daemon a moment to bind before probing.
+for _ in $(seq 1 20); do
+  curl -sf "http://127.0.0.1:8080/api/v1/check" >/dev/null 2>&1 && break
+  sleep 1
+done
 
 echo ""
 echo "--- Daemon health ---"
-curl -sf http://127.0.0.1:8080/api/v1/check && echo " ✅ daemon OK" || echo " ❌ daemon FAIL"
+if curl -sf "http://127.0.0.1:8080/api/v1/check" >/dev/null 2>&1; then
+  echo " ✅ daemon OK"
+else
+  echo " ❌ daemon FAIL — check 'docker logs signal-cli-gateway'"
+fi
 
-echo ""
-echo "--- Proxy health ---"
-curl -sf http://127.0.0.1:8880/api/v1/check && echo " ✅ proxy OK" || echo " ❌ proxy FAIL"
+# Only probe the proxy in the modes that actually run one. Probing 127.0.0.1:8880
+# in loopback/unix mode reports a bogus FAIL, because no proxy is listening
+# there by design.
+case "${DEPLOY_MODE}" in
+  loopback-proxy|exposed-proxy)
+    echo ""
+    echo "--- Proxy health ---"
+    if curl -sf "http://127.0.0.1:8880/api/v1/check" >/dev/null 2>&1; then
+      echo " ✅ proxy OK"
+    else
+      echo " ❌ proxy FAIL — check 'docker logs signal-cli-gateway'"
+    fi
 
-echo ""
-echo "--- Proxy token (needed for Hermes .env) ---"
-docker logs signal-cli-gateway 2>&1 | grep ">>>" || echo "(check 'docker logs signal-cli-gateway' for the token)"
+    echo ""
+    echo "--- Proxy token (needed for Hermes .env) ---"
+    docker logs signal-cli-gateway 2>&1 | grep ">>>" \
+      || echo "(no token in logs — set SECURITY_PROXY_TOKEN to pin one)"
+    ;;
+  *)
+    echo ""
+    echo "--- Proxy ---"
+    echo " ⏭  skipped (mode '${DEPLOY_MODE}' runs no proxy; set SECURITY_MODE=loopback-proxy to enable)"
+    ;;
+esac
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"

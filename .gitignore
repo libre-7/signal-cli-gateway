@@ -1,0 +1,13 @@
+# Local secrets — .env holds SECURITY_PROXY_TOKEN
+.env
+.env.local
+.env.*.local
+
+# Signal identity keys and account state — never commit
+signal-cli-data/
+*.tar.gz
+config.yml
+
+# Local artifacts
+*.log
+.DS_Store

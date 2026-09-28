@@ -6,7 +6,7 @@
 # Stage 1: signal-cli native binary
 FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS signal-cli-builder
 
-ARG SIGNAL_CLI_VERSION=0.14.7
+ARG SIGNAL_CLI_VERSION=0.14.8
 
 # AsamK/signal-cli release signing key.
 # Fingerprint verified against keys.openpgp.org and keyserver.ubuntu.com
@@ -37,7 +37,12 @@ RUN wget -q "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI
 FROM golang:1.26-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS proxy-builder
 
 ARG SECURED_PROXY_VERSION=v1.6.2
-ARG TARGETARCH
+# Upstream publishes no arm64 build of signal-cli's Linux-native tarball, so
+# this image is amd64-only (CI builds linux/amd64). Building the Go proxy for
+# the build platform keeps the two binaries' architectures consistent instead
+# of honouring TARGETARCH, which would produce an arm64 proxy beside an amd64
+# signal-cli.
+ARG TARGETARCH=amd64
 ARG TARGETOS=linux
 
 RUN apk add --no-cache git ca-certificates && \
@@ -53,16 +58,27 @@ RUN apk add --no-cache git ca-certificates && \
 FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 # Install runtime deps: socat for unix-socket mode, gosu for non-root
+# openssl is explicit, not inherited via ca-certificates: entrypoint.sh calls
+# `openssl rand -hex 32` to mint the proxy token, and relying on ca-certificates
+# to drag in the openssl *binary* is an undocumented dependency that would break
+# token generation at runtime if that chain ever changed.
 RUN apt-get update -qq && apt-get install -y -qq \
         socat \
         gosu \
         ca-certificates \
         curl \
+        openssl \
         qrencode \
         && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r signal && useradd -r -g signal -d /opt/signal-cli-data -s /sbin/nologin signal
+# Create non-root user.
+# The uid/gid are pinned EXPLICITLY, not left to `useradd -r` dynamic system
+# allocation: compose.yaml mounts /var/run/signal-cli from a tmpfs declared as
+# `uid=999,gid=999`, and that number must match this user or the daemon cannot
+# create its socket in unix mode (EACCES). An explicit id makes the contract
+# stable across base-image rebuilds.
+RUN groupadd -r -g 10001 signal && \
+    useradd -r -u 10001 -g signal -d /opt/signal-cli-data -s /sbin/nologin signal
 
 # Runtime dirs that need to exist (and be signal-owned) before start.
 # /var/run/signal-cli holds the UNIX socket in SECURITY_MODE=unix;

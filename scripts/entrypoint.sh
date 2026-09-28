@@ -73,7 +73,7 @@ start_signal_cli() {
 
     # Wait for daemon to be ready
     log "Waiting for signal-cli daemon to be ready..."
-    for i in $(seq 1 30); do
+    for _ in $(seq 1 30); do
         if curl -sf "http://${bind}:${SIGNAL_CLI_PORT}/api/v1/check" >/dev/null 2>&1; then
             log "signal-cli daemon is ready."
             return 0
@@ -84,6 +84,12 @@ start_signal_cli() {
 }
 
 # --- Proxy config generator -------------------------------------------------
+# A user-supplied /config/config.yml is authoritative: the README documents
+# bind-mounting your own config to override rate limiting, field policies and
+# message templates. Generating over it would silently discard that file on
+# every start, so only generate defaults when the file is absent.
+CUSTOM_PROXY_CONFIG="${CUSTOM_PROXY_CONFIG:-true}"
+
 write_proxy_config() {
     local proxy_port="${1:-8880}"
     local proxy_token="${2:-}"
@@ -96,6 +102,20 @@ write_proxy_config() {
         log "SECURITY_PROXY_TOKEN not set — generated random token (visible once):"
         log "  >>>  ${proxy_token}  <<<"
         log "  Set SECURITY_PROXY_TOKEN in .env to use a fixed token."
+    fi
+
+    # Respect an existing user config (mounted per README "Advanced: Custom
+    # Proxy Configuration"). Export CONFIG_PATH so the proxy loads it as-is.
+    if [ "${CUSTOM_PROXY_CONFIG}" = "true" ] && [ -f /config/config.yml ]; then
+        log "Using existing user-supplied /config/config.yml (not overwriting)."
+        log "Set CUSTOM_PROXY_CONFIG=false to force regeneration of the default config."
+        export CONFIG_PATH=/config/config.yml
+        # Still honour an explicitly supplied token so a user can rotate auth
+        # without hand-editing their config.
+        if [ -n "${SECURITY_PROXY_TOKEN:-}" ]; then
+            export SECURITY_PROXY_TOKEN="${proxy_token}"
+        fi
+        return 0
     fi
 
     # Build trusted IPs YAML list
@@ -182,7 +202,7 @@ case "${SECURITY_MODE}" in
         CHILDREN_PIDS="${CHILDREN_PIDS} $!"
 
         # Wait for socket to appear
-        for i in $(seq 1 30); do
+        for _ in $(seq 1 30); do
             if [ -S "${socket_path}" ]; then
                 log "UNIX socket ready."
                 break
@@ -209,7 +229,7 @@ log "Waiting for gateway to be ready..."
 case "${SECURITY_MODE}" in
     unix)
         ready=0
-        for i in $(seq 1 30); do
+        for _ in $(seq 1 30); do
             if printf '{"jsonrpc":"2.0","id":1,"method":"version"}\n' \
                 | timeout 3 gosu signal socat - "UNIX-CONNECT:/var/run/signal-cli/socket" 2>/dev/null \
                 | grep -q '"result"'; then
@@ -220,7 +240,9 @@ case "${SECURITY_MODE}" in
         [ "$ready" = 1 ] || die "gateway failed readiness check (unix mode)"
         ;;
     *)
-        for i in $(seq 1 30); do
+        # The counter is intentionally unused — this loop only retries until the
+        # probe succeeds. `_` says so without tripping SC2034.
+        for _ in $(seq 1 30); do
             if curl -sf "http://127.0.0.1:${SIGNAL_CLI_PORT}/api/v1/check" >/dev/null 2>&1; then
                 ready=1; break
             fi
@@ -232,5 +254,27 @@ esac
 log "Gateway is ready."
 
 # --- Wait for all children --------------------------------------------------
+# Supervise: a bare `wait` returns only when EVERY child has exited, so a
+# crashed signal-cli with a surviving proxy would leave the container "Up"
+# while serving errors and never trigger Docker's restart policy. Poll instead
+# and exit non-zero on the first child death so `restart: unless-stopped`
+# actually fires. The TERM/INT trap above still handles graceful shutdown.
 log "All processes started. Monitoring children (PIDs: ${CHILDREN_PIDS})..."
-wait
+
+while true; do
+    # `wait -n` reaps and returns when the next child exits. Reaping matters:
+    # an unreaped child stays a zombie and `kill -0` still succeeds on it, so
+    # liveness can only be judged for a PID the shell has already reaped.
+    wait -n 2>/dev/null || true
+    # After every return, sweep the tracked PIDs. The one just reaped no longer
+    # exists, so `kill -0` fails for it and we shut down. This catches a clean
+    # exit-0 child just as reliably as a crash, and if `wait -n` is
+    # unsupported (bash < 4.3) it simply degrades to a 1 Hz liveness poll.
+    for pid in ${CHILDREN_PIDS}; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            log "FATAL: child process ${pid} exited — shutting down so the restart policy can recover the container."
+            die "supervised child ${pid} died"
+        fi
+    done
+    sleep 1
+done

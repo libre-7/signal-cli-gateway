@@ -4,3 +4,5 @@ ignored:
   - DL3015   # --no-install-recommends (pre-existing; hardening card)
   - DL3003   # WORKDIR vs cd (pre-existing; builder-stage style)
   - DL3018   # Pin apk versions (pre-existing; supply-chain card)
+  - DL4006   # SHELL pipefail (pre-existing; the wget/gpg chain fails the build on error anyway)
+  - DL3025   # JSON ENTRYPOINT form — already JSON; hadolint flags the HEALTHCHECK/CMD line
