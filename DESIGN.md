@@ -328,6 +328,11 @@ SECURITY_MODE=loopback          # Options: loopback, loopback-proxy, exposed-pro
 SECURITY_PROXY_TOKEN=          # Bearer token for proxy auth (auto-generated if empty)
 SECURITY_PROXY_ALLOWED_IPS=    # CIDRs that bypass auth (default: 127.0.0.1)
 PROXY_PORT=8880                # Proxy listener port (default: 8880)
+LOG_LEVEL=info                 # Proxy log level (default: info)
+
+# -- Security Mode: custom proxy config --
+CUSTOM_PROXY_CONFIG=true       # true: a mounted /config/config.yml is used as-is
+                               # false: always regenerate the built-in default
 
 # -- Security Mode: loopback / unix --
 SIGNAL_CLI_PORT=8080           # signal-cli daemon port (default: 8080)
@@ -476,9 +481,21 @@ as optional auth layer — balances security, flexibility, and Hermes compatibil
 better than any single alternative. The env-var-driven mode selection lets users
 choose their risk posture without forking the project.
 
-For the default recommended setup:
+For the safest default setup (`loopback`, which is what the container ships with):
+- `SECURITY_MODE=loopback` — signal-cli on 127.0.0.1:8080, nothing exposed
+- Hermes connects to `http://127.0.0.1:8080` on the same host
+- Nothing to authenticate, because nothing is reachable off-host
+
+For the default setup when another client needs access (`loopback-proxy`):
 - `SECURITY_MODE=loopback-proxy`
-- Hermes connects on `127.0.0.1:8880` (host networking) or `signal-cli-gateway:8880` (Docker bridge)
+- Hermes connects on `127.0.0.1:8880` (host networking)
 - Bearer token + IP allowlisting protects the proxy
 - signal-cli itself is unreachable, bound to 127.0.0.1:8080
 - Dangerous management endpoints are not exposed — signal-cli's `--http` mode only exposes `/api/v1/rpc`, `/api/v1/events`, and `/api/v1/check`. Management operations (`register`, `link`, `unregister`) are CLI-only.
+
+## 10. Platform Support
+
+This image is **amd64-only**. signal-cli publishes its native Linux binary for
+amd64 only — there is no arm64 `Linux-native` release asset — so the CI workflow
+builds `linux/amd64` and no arm64 image is published. Building an arm64 image
+would fail at the tarball download step in stage 1.

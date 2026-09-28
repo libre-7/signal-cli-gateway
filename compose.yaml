@@ -85,7 +85,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=256m,mode=1777,exec
-      - /var/run/signal-cli:size=16m,mode=0755,uid=999,gid=999
+      # uid/gid MUST match the pinned signal user in the Dockerfile
+      # (groupadd -g 10001 / useradd -u 10001). A mismatch here makes unix
+      # mode unable to create its socket (EACCES).
+      - /var/run/signal-cli:size=16m,mode=0755,uid=10001,gid=10001
     deploy:
       resources:
         limits:

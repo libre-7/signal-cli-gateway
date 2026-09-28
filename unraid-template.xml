@@ -5,10 +5,19 @@
   <Registry>https://github.com/libre-7/signal-cli-gateway/pkgs/container/signal-cli-gateway</Registry>
   <Network>host</Network>
   <Privileged>false</Privileged>
-  <!-- Hardening: drop all capabilities, block privilege escalation, cap memory.
+  <!-- Hardening: drop all capabilities, then add back ONLY what the entrypoint
+       needs, block privilege escalation, cap memory.
        PID 1 stays root only for volume chown + gosu privilege drop; all
-       long-running processes (signal-cli, proxy, socat) run as user 'signal'. -->
-  <ExtraParams>--cap-drop=ALL --security-opt no-new-privileges=true --memory=512m</ExtraParams>
+       long-running processes (signal-cli, proxy, socat) run as user 'signal'.
+
+       The cap_add list MUST mirror compose.yaml. Dropping ALL capabilities
+       alone empties the bounding set, so `chown` of the data volume fails
+       with EPERM and `gosu signal ...` cannot switch user ("failed switching
+       to signal: operation not permitted") — the container cannot start in
+       any mode. CHOWN: chown the mounted data volume; SETUID/SETGID: gosu
+       drops to 'signal'; FOWNER/DAC_OVERRIDE: the proxy and socat touch
+       files not owned by the caller under the read-only rootfs. -->
+  <ExtraParams>--cap-drop=ALL --cap-add=CHOWN --cap-add=SETUID --cap-add=SETGID --cap-add=FOWNER --cap-add=DAC_OVERRIDE --security-opt no-new-privileges=true --memory=512m</ExtraParams>
   <Support>https://github.com/libre-7/signal-cli-gateway</Support>
   <Project>https://github.com/libre-7/signal-cli-gateway</Project>
   <Icon>https://raw.githubusercontent.com/CorneliousJD/Docker-Templates/master/icons/signal.png</Icon>
@@ -20,10 +29,11 @@ Supports 4 security modes via SECURITY_MODE env var:
     signal-cli daemon on 127.0.0.1:8080, no auth.
     Requires --network host (loopback inside bridge is unreachable).
 
-  loopback-proxy (recommended)
-    signal-cli on 127.0.0.1:8080 + auth proxy on 127.0.0.1:8880.
+  loopback-proxy
+    signal-cli on 127.0.0.1:8080 + auth proxy on 0.0.0.0:8880,
+    restricted to local callers by ipFilter.
     Bearer token + IP allowlist protects the proxy.
-    Requires --network host.
+    Requires --network host. Use this when another client needs access.
 
   exposed-proxy
     Proxy binds 0.0.0.0:8880 for remote access.
@@ -51,7 +61,7 @@ Then scan the QR code from Signal app → Settings → Linked Devices.</Overview
 
   <Config Name="SIGNAL_ACCOUNT" Target="SIGNAL_ACCOUNT" Mode="v" Type="Variable" Display="always" Required="true" Mask="false" Default="" Description="Your Signal phone number in E.164 format. REQUIRED."/>
 
-  <Config Name="SECURITY_MODE" Target="SECURITY_MODE" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="loopback-proxy" Description="Security mode: loopback, loopback-proxy, exposed-proxy, unix."/>
+  <Config Name="SECURITY_MODE" Target="SECURITY_MODE" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="loopback" Description="Security mode: loopback (default, nothing exposed), loopback-proxy, exposed-proxy, unix."/>
 
   <Config Name="SECURITY_PROXY_TOKEN" Target="SECURITY_PROXY_TOKEN" Mode="v" Type="Variable" Display="always" Required="false" Mask="true" Default="" Description="Bearer token for proxy authentication. Auto-generated if empty (logged at startup)."/>
 
@@ -65,8 +75,12 @@ Then scan the QR code from Signal app → Settings → Linked Devices.</Overview
 
   <Config Name="SIGNAL_CLI_TRUST_NEW_IDENTITIES" Target="SIGNAL_CLI_TRUST_NEW_IDENTITIES" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="on-first-use" Description="on-first-use, always, never."/>
 
+  <Config Name="CUSTOM_PROXY_CONFIG" Target="CUSTOM_PROXY_CONFIG" Mode="v" Type="Variable" Display="always" Required="false" Mask="false" Default="true" Description="true (default): a config.yml mounted at /config/config.yml is used as-is and never overwritten. false: always regenerate the built-in default config."/>
+
   <!-- Volume Mappings -->
 
   <Config Name="Data Volume" Target="/opt/signal-cli-data" Mode="rw" Type="Path" Display="always" Required="true" Mask="false" Default="/mnt/user/appdata/signal-cli-gateway/" Description="Persistent storage for Signal identity keys and config. MUST persist across container updates."/>
+
+  <Config Name="Proxy Config" Target="/config/config.yml" Mode="ro" Type="Path" Display="always" Required="false" Mask="false" Default="" Description="OPTIONAL custom secured-signal-api config.yml. Mounted read-only; the container uses it as-is instead of generating a default. Leave empty to use the built-in generated config."/>
 
 </Container>
