@@ -235,6 +235,13 @@ docker build --target signal-cli-builder -t signal-cli-gateway:no-proxy .
 See [DESIGN.md](DESIGN.md) for the full security analysis, threat model, and
 comparison of all approaches considered.
 
+## Audit
+
+[AUDIT.md](AUDIT.md) holds the most recent comprehensive code review (2026-09-27):
+16 findings, all fixed and verified on real Docker, with the full verification
+record. It also carries forward the 2026-08-21 review's disposition and a list of
+suspicions that were investigated and **refuted**, so they aren't re-audited.
+
 ## License
 
 GNU General Public License v3.0
